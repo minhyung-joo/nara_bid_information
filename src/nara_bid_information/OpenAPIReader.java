@@ -16,7 +16,7 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
-public class OpenAPIReader {
+public class OpenAPIReader implements Runnable {
 	final String SERVER_KEY = "J0qA4h8ti9oPo90bJJ8COx%2BxiJ1AXL7dyffFfFGiHHVNKj2LWrFE1GJxJ2HdKmMfI%2BhSYKblaSLGnkAlvkW1gw%3D%3D";
 	final String NUM_OF_ROWS = "50000";
 	
@@ -45,13 +45,18 @@ public class OpenAPIReader {
 	Option option; // 공고, 결과, 기초금액, 예비가격
 	// String re; // 재입찰 flag
 	
-	public OpenAPIReader(String sd, String ed) {
+	ProgressTracker tracker;
+	int totalItem;
+	
+	public OpenAPIReader(String sd, String ed, String op, ProgressTracker pt) {
 		startDate = sd;
 		endDate = ed;
+		tracker = pt;
+		setOption(op);
 	}
 	
 	public static void main(String args[]) throws ClassNotFoundException, IOException, SQLException {
-		OpenAPIReader tester = new OpenAPIReader("20170103", "20170103");
+		OpenAPIReader tester = new OpenAPIReader("20131216", "20131216", null, null);
 		
 		tester.processNoti();
 		tester.processRes();
@@ -81,6 +86,13 @@ public class OpenAPIReader {
 			String min = d.substring(10);
 			
 			return year + "-" + month + "-" + day + " " + hour + ":" + min;
+		}
+		if (d.length() == 8) {
+			String year = d.substring(0, 4);
+			String month = d.substring(4, 6);
+			String day = d.substring(6, 8);
+			
+			return year + "-" + month + "-" + day + " 00:00:00";
 		}
 		else return "";
 	}
@@ -224,10 +236,12 @@ public class OpenAPIReader {
 		String path = buildDatePath();
 		Document doc = getResponse(path);
 		Element count = doc.getElementsByTag("totalCount").first();
-		int totalCount = Integer.parseInt(count.text());
+		totalItem = Integer.parseInt(count.text());
 		
 		Elements items = doc.getElementsByTag("item");
-		for (int i = 0; i < totalCount; i++) {
+		for (int i = 0; i < totalItem; i++) {
+			if (tracker != null) tracker.updateProgress(); 
+			
 			Element item = items.get(i);
 			boolean complete = false;
 			
@@ -454,7 +468,11 @@ public class OpenAPIReader {
 		
 		setType(t);
 		
-		String sql = "SELECT DISTINCT 입찰공고번호 FROM narabidinfo WHERE 업무=\"" + t + "\" AND 공고완료=1 AND 기초완료=0;";
+		String sd = parseDate(startDate);
+		String ed = parseDate(endDate);
+		String sql = "SELECT DISTINCT 입찰공고번호 FROM narabidinfo WHERE 업무=\"" + t + "\" AND "
+				+ "예정개찰일시 BETWEEN \"" + sd + "\" AND \"" + ed + "\" AND "
+				+ "예가방법=\"복수예가\" AND 공고완료=1 AND 기초완료=0;";
 		rs = st.executeQuery(sql);
 		
 		while (rs.next()) {
@@ -465,7 +483,6 @@ public class OpenAPIReader {
 			String path = buildItemPath(bidNum);
 			
 			Document doc = getResponse(path);
-			System.out.println(doc.html());
 			int totalCount = Integer.parseInt(doc.getElementsByTag("totalCount").text());
 			
 			Elements items = doc.getElementsByTag("item");
@@ -510,7 +527,11 @@ public class OpenAPIReader {
 		
 		setType(t);
 		
-		String sql = "SELECT DISTINCT 입찰공고번호 FROM narabidinfo WHERE 업무=\"" + t + "\" AND 결과완료=1 AND 복수완료=0;";
+		String sd = parseDate(startDate);
+		String ed = parseDate(endDate);
+		String sql = "SELECT DISTINCT 입찰공고번호 FROM narabidinfo WHERE 업무=\"" + t + "\" AND "
+				+ "실제개찰일시 BETWEEN \"" + sd + "\" AND \"" + ed + "\" AND "
+				+ "예비가격파일존재여부=\"Y\" AND 결과완료=1 AND 복수완료=0;";
 		rs = st.executeQuery(sql);
 		
 		while (rs.next()) {
@@ -537,16 +558,45 @@ public class OpenAPIReader {
 				String expPrice = item.getElementsByTag("예정가격금액").text();
 				if (expPrice.equals("")) expPrice = "0";
 				
-				String where = "WHERE 입찰공고번호=\"" + bidNum + "\" AND 입찰공고차수=\"" + bidver + "\" AND 재입찰번호=" + rebidno + " AND 입찰분류=" + series;
-				
-				sql = "UPDATE narabidinfo SET 총예가갯수=\"" + priceNum + "\", "
-						+ "복수" + index + "=" + dupPrice + ", "
-						+ "예정가격=" + expPrice + ", 복수완료=1 " + where;
-				System.out.println(sql);
-				st.executeUpdate(sql);
+				if (!index.equals("")) {
+					String where = "WHERE 입찰공고번호=\"" + bidNum + "\" AND 입찰공고차수=\"" + bidver + "\" AND 재입찰번호=" + rebidno + " AND 입찰분류=" + series;
+					
+					sql = "UPDATE narabidinfo SET 총예가갯수=\"" + priceNum + "\", "
+							+ "복수" + index + "=" + dupPrice + ", "
+							+ "예정가격=" + expPrice + ", 복수완료=1 " + where;
+					System.out.println(sql);
+					st.executeUpdate(sql);
+				}
 			}
 		}
 		
 		closeDB();
+	}
+	
+	public int getTotal() {
+		return totalItem;
+	}
+
+	public void run() {
+		try {
+			switch(option) {
+			case NOTI:
+				processNoti();
+				break;
+			case RES:
+				processRes();
+				break;
+			case BASE_PRICE:
+				processBasePrice();
+				break;
+			case PRE_PRICE:
+				processPrePrice();
+				break;
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		} finally {
+			tracker.finish();
+		}
 	}
 }

@@ -3,6 +3,8 @@ package nara_bid_information;
 import java.awt.Dimension;
 import java.awt.GridLayout;
 import java.awt.Toolkit;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.util.prefs.Preferences;
 
 import javax.swing.JComponent;
@@ -26,6 +28,7 @@ public class MainFrame extends JFrame {
 	
 	JTabbedPane dataTabs;
 	JComponent bidPanel;
+	JComponent negoPanel;
 	
 	public MainFrame() throws ClassNotFoundException, InstantiationException, IllegalAccessException, UnsupportedLookAndFeelException {
 		super();
@@ -59,8 +62,8 @@ public class MainFrame extends JFrame {
 	private void loadPreferences() {
 		pref = Preferences.userRoot().node(this.getClass().getName());
 		
-		Resources.initialize(pref.get("DB_ID", "root"), pref.get("DB_PW", "qldjel123"), 
-				pref.get("SCHEMA", "bid_db"), pref.get("PATH", "C:/Users/owner/Documents/"));
+		//Resources.initialize(pref.get("DB_ID", "root"), pref.get("DB_PW", "qldjel123"), 
+		//		pref.get("SCHEMA", "bid_db"), pref.get("PATH", "C:/Users/owner/Documents/"));
 	}
 
 	public void initializeMenu() {
@@ -69,9 +72,29 @@ public class MainFrame extends JFrame {
 		downloadMenu = new JMenu("다운로드");
 		
 		notiDownload = new JMenuItem("입찰공고");
+		notiDownload.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				UpdaterFrame notiFrame = new UpdaterFrame("공고");
+			}
+		});
 		resDownload = new JMenuItem("개찰결과");
+		resDownload.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				UpdaterFrame resFrame = new UpdaterFrame("결과");
+			}
+		});
 		basePriceDownload = new JMenuItem("기초금액");
+		basePriceDownload.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				UpdaterFrame baseFrame = new UpdaterFrame("기초금액");
+			}
+		});
 		prePriceDownload = new JMenuItem("복수가격");
+		prePriceDownload.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent e) {
+				UpdaterFrame preFrame = new UpdaterFrame("예비가격");
+			}
+		});
 		negoDownload = new JMenuItem("협상에의한건처리");
 		changeDownload = new JMenuItem("공고변경/재입찰");
 		
@@ -99,8 +122,10 @@ public class MainFrame extends JFrame {
 	public void initializeTabs() {
 		dataTabs = new JTabbedPane();
 		
-		bidPanel = new BidPanel();
-		dataTabs.addTab("데이터 조회", bidPanel);
+		bidPanel = new BidPanel("입찰");
+		negoPanel = new BidPanel("협상");
+		dataTabs.addTab("입찰정보 조회", bidPanel);
+		dataTabs.addTab("협상건 조회", negoPanel);
 		this.add(dataTabs);
 	}
 	
