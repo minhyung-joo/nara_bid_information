@@ -8,12 +8,15 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
+import java.io.IOException;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.text.DecimalFormat;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 
 import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
@@ -21,7 +24,6 @@ import javax.swing.DefaultComboBoxModel;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
-import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
@@ -35,6 +37,7 @@ import javax.swing.table.DefaultTableModel;
 import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableColumnModel;
 
+@SuppressWarnings("serial")
 public class BidPanel extends JPanel {
 	JTable data;
 	ArrayList<SearchOptionPanel> searchPanels;
@@ -125,7 +128,7 @@ public class BidPanel extends JPanel {
 			super();
 			
 			workDrop = new JComboBox<String>();
-			DefaultComboBoxModel model = new DefaultComboBoxModel(Resources.WORKS);
+			DefaultComboBoxModel<String> model = new DefaultComboBoxModel<String>(Resources.WORKS);
 			workDrop.setModel(model);
 			workDrop.setSelectedIndex(3);
 			orgInput = new JTextField(15);
@@ -179,12 +182,28 @@ public class BidPanel extends JPanel {
 					
 					String org = orgInput.getText();
 					String type = workDrop.getSelectedItem().toString();
+					SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+					String today = sdf.format(new Date()) + " 00:00:00";
 					
 					String sql = "SELECT 입찰공고번호, 실제개찰일시, 면허제한, 기초예정가격, 예정가격, 투찰금액, 복수1, 복수15, "
 							+ "참가자수, 예정개찰일시, 진행구분코드, 재입찰허용여부, 집행관, 담당자, 발주기관, 수요기관, 입찰방식, 계약방법, "
-							+ "난이도계수, 상한 FROM narabidinfo WHERE ";
+							+ "예비가격재작성여부, 난이도계수, 상한 FROM narabidinfo WHERE ";
 					if (bidType.equals("협상")) sql += "LEFT(계약방법, 2)=\"수의\" AND ";
-					sql += "결과완료=1 ORDER BY 실제개찰일시, 입찰공고번호";
+					if (!org.equals("")) sql += "발주기관=\"" + org + "\" AND ";
+					if (!type.equals("전체")) sql += "업무=\"" + type + "\" AND ";
+					if (rateCheck.isSelected()) {
+						String lowerBound = Resources.parseRate(lowerInput.getText());
+						String upperBound = Resources.parseRate(upperInput.getText());
+						
+						sql += "상한=\"" + upperBound + "\" AND 하한=\"" + lowerBound + "\" AND ";
+					}
+					sql += "결과완료=1 ";
+					
+					sql += "UNION SELECT 입찰공고번호, 실제개찰일시, 면허제한, 기초예정가격, 예정가격, 투찰금액, 복수1, 복수15, "
+							+ "참가자수, 예정개찰일시, 진행구분코드, 재입찰허용여부, 집행관, 담당자, 발주기관, 수요기관, 입찰방식, 계약방법, "
+							+ "예비가격재작성여부, 난이도계수, 상한 FROM narabidinfo WHERE ";
+					if (!org.equals("")) sql += "발주기관=\"" + org + "\" AND ";
+					sql += "예정개찰일시 >= \"" + today + "\" ORDER BY 예정개찰일시, 입찰공고번호;";
 					
 					rs = st.executeQuery(sql);
 					
@@ -193,10 +212,16 @@ public class BidPanel extends JPanel {
 					int index = 1;
 					while (rs.next()) {
 						String bidno = rs.getString("입찰공고번호");
-						String openDate = rs.getString("실제개찰일시");
-						if (openDate.length() == 21) {
+						String openDate = "-";
+						if (rs.getString("실제개찰일시") != null) {
+							openDate = rs.getString("실제개찰일시");
 							openDate = openDate.substring(2, 4) + openDate.substring(5, 7)
-								+ openDate.substring(8, 10) + " " + openDate.substring(11, 16);
+							+ openDate.substring(8, 10) + " " + openDate.substring(11, 16);
+						}
+						else if (rs.getString("예정개찰일시") != null) {
+							openDate = rs.getString("예정개찰일시");
+							openDate = openDate.substring(2, 4) + openDate.substring(5, 7)
+							+ openDate.substring(8, 10) + " " + openDate.substring(11, 16);
 						}
 						String license = rs.getString("면허제한");
 						String basePrice = processNumber(rs.getString("기초예정가격"));						
@@ -205,16 +230,34 @@ public class BidPanel extends JPanel {
 						String dupPrice1 = processNumber(rs.getString("복수1"));
 						String dupPrice15 = processNumber(rs.getString("복수15"));
 						String comp = processNumber(rs.getString("참가자수"));
-						String planDate = rs.getString("예정개찰일시");
-						if (planDate == null) {
-							planDate = openDate;
-						}
-						else if (planDate.length() == 21) {
+						String planDate = "-";
+						if (rs.getString("예정개찰일시") != null) {
+							planDate = rs.getString("예정개찰일시");
 							planDate = planDate.substring(2, 4) + planDate.substring(5, 7)
-								+ planDate.substring(8, 10) + " " + planDate.substring(11, 16);
+							+ planDate.substring(8, 10) + " " + planDate.substring(11, 16);
+						}
+						else if (rs.getString("실제개찰일시") != null) {
+							planDate = rs.getString("실제개찰일시");
+							planDate = planDate.substring(2, 4) + planDate.substring(5, 7)
+							+ planDate.substring(8, 10) + " " + planDate.substring(11, 16);
 						}
 						String result = rs.getString("진행구분코드");
 						String rebid = rs.getString("재입찰허용여부");
+						if (rebid.equals("Y")) {
+							String reprice = rs.getString("예비가격재작성여부");
+							if (reprice.equals("재입찰시 예비가격을 다시 생성하여 예정가격이 산정됩니다.")) {
+								rebid = "재생성";
+							}
+							else if (reprice.equals("재입찰시 기존 예비가격을 사용하여 예정가격이 산정됩니다.")) {
+								rebid = "기존";
+							}
+							else {
+								rebid = "재입찰허용";
+							}
+						}
+						else {
+							rebid = "없음";
+						}
 						String exec = rs.getString("집행관");
 						String obs = rs.getString("담당자");
 						String notiOrg = rs.getString("발주기관");
@@ -239,7 +282,14 @@ public class BidPanel extends JPanel {
 		
 		private class ExcelListener implements ActionListener {
 			public void actionPerformed(ActionEvent e) {
-				
+				if (!orgInput.getText().equals("")) {
+					ExcelWriter writer = new ExcelWriter(orgInput.getText(), workDrop.getSelectedItem().toString());
+					try {
+						writer.toExcel();
+					} catch (ClassNotFoundException | SQLException | IOException e1) {
+						e1.printStackTrace();
+					}
+				}
 			}
 		}
 	}

@@ -3,16 +3,14 @@ package nara_bid_information;
 import java.awt.BorderLayout;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.io.IOException;
-import java.sql.SQLException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import javax.swing.BorderFactory;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
@@ -21,12 +19,12 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextArea;
-import javax.swing.SwingConstants;
 import javax.swing.WindowConstants;
 
 import org.jdatepicker.DatePicker;
 import org.jdatepicker.JDatePicker;
 
+@SuppressWarnings("serial")
 public class UpdaterFrame extends JFrame implements ProgressTracker {
 	ExecutorService executor;
 	OpenAPIReader reader;
@@ -44,8 +42,8 @@ public class UpdaterFrame extends JFrame implements ProgressTracker {
 	
 	String type;
 	
-	public UpdaterFrame(String type) {
-		super();
+	public UpdaterFrame(String type, Date anchorDate) {
+		super(type);
 		
 		reference = this;
 		this.type = type;
@@ -65,13 +63,15 @@ public class UpdaterFrame extends JFrame implements ProgressTracker {
 		JPanel centerPanel = new JPanel();
 		centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.PAGE_AXIS));
 		JPanel startRow = new JPanel();
-		startDate = new JDatePicker(Calendar.getInstance().getTime());
+		if (type.equals("협상") || type.equals("재입찰")) startDate = new JDatePicker(anchorDate);
+		else startDate = new JDatePicker(Calendar.getInstance().getTime());
 		startDate.setTextfieldColumns(12);
 		startDate.setTextEditable(true);
 		startRow.add(new JLabel("시작일시: "));
 		startRow.add((JComponent) startDate);
 		JPanel endRow = new JPanel();
-		endDate = new JDatePicker(Calendar.getInstance().getTime());
+		if (type.equals("기초금액")) endDate = new JDatePicker(anchorDate);
+		else endDate = new JDatePicker(Calendar.getInstance().getTime());
 		endDate.setTextfieldColumns(12);
 		endDate.setTextEditable(true);
 		endRow.add(new JLabel("종료일시: "));
@@ -108,6 +108,11 @@ public class UpdaterFrame extends JFrame implements ProgressTracker {
 		mainPanel.add(centerPanel, BorderLayout.CENTER);
 		mainPanel.add(bottomPanel, BorderLayout.SOUTH);
 		
+		addWindowListener(new java.awt.event.WindowAdapter() {
+		    public void windowClosing(java.awt.event.WindowEvent windowEvent) {
+		    }
+		});
+		
 		this.add(mainPanel);
 		this.setSize(250, 300);
 		this.setResizable(false);
@@ -121,6 +126,10 @@ public class UpdaterFrame extends JFrame implements ProgressTracker {
 		public void actionPerformed(ActionEvent e) {
 			if (!running) {
 				running = true;
+				
+				curItem = "0";
+				totalItem = "0";
+				progress.setText(curItem + "/" + totalItem);
 				
 				Calendar startCalendar = Calendar.getInstance();
 				SimpleDateFormat dateFormatter = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
