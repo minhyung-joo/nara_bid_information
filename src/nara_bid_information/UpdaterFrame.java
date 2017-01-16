@@ -1,6 +1,8 @@
 package nara_bid_information;
 
 import java.awt.BorderLayout;
+import java.awt.Image;
+import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.text.SimpleDateFormat;
@@ -10,6 +12,8 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
@@ -63,7 +67,7 @@ public class UpdaterFrame extends JFrame implements ProgressTracker {
 		JPanel centerPanel = new JPanel();
 		centerPanel.setLayout(new BoxLayout(centerPanel, BoxLayout.PAGE_AXIS));
 		JPanel startRow = new JPanel();
-		if (type.equals("Çù»ó") || type.equals("ÀçÀÔÂû")) startDate = new JDatePicker(anchorDate);
+		if (type.equals("Çù»ó") || type.equals("ÀçÀÔÂû") || type.equals("¿¹ºñ°¡°Ý")) startDate = new JDatePicker(anchorDate);
 		else startDate = new JDatePicker(Calendar.getInstance().getTime());
 		startDate.setTextfieldColumns(12);
 		startDate.setTextEditable(true);
@@ -113,6 +117,9 @@ public class UpdaterFrame extends JFrame implements ProgressTracker {
 		    }
 		});
 		
+		Toolkit toolkit = Toolkit.getDefaultToolkit();
+		Image icon = toolkit.getImage("nara.png");
+		this.setIconImage(icon);
 		this.add(mainPanel);
 		this.setSize(250, 300);
 		this.setResizable(false);
@@ -145,6 +152,7 @@ public class UpdaterFrame extends JFrame implements ProgressTracker {
 					executor = Executors.newFixedThreadPool(1);
 					executor.submit(reader);
 				} catch (Exception e1) {
+					Logger.getGlobal().log(Level.WARNING, e1.getMessage(), e1);
 					e1.printStackTrace();
 					finish();
 				}
@@ -154,19 +162,8 @@ public class UpdaterFrame extends JFrame implements ProgressTracker {
 	
 	private class AutoListener implements ActionListener {
 		public void actionPerformed(ActionEvent e) {
-			if (autoCheck.isSelected()) {
-				long delay = Long.parseLong(interval.getText()) * 1000;
-				
-				autoProcessor.schedule(new TimerTask() {
-					public void run() {
-						if (!running) manualProcess.doClick();
-					}
-				}, delay);
-				
-				if (!running) manualProcess.doClick();
-			}
-			else if (!autoCheck.isSelected()) {
-				autoProcessor.cancel();
+			if ( (!running) && autoCheck.isSelected() ) {
+				manualProcess.doClick();
 			}
 		}
 	}
@@ -188,5 +185,15 @@ public class UpdaterFrame extends JFrame implements ProgressTracker {
 		Calendar endCalendar = Calendar.getInstance();
 		SimpleDateFormat dateFormatter = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
 		endTime.setText("Ã³¸®Á¾·á: " + dateFormatter.format(endCalendar.getTime()));
+		
+		if (autoCheck.isSelected()) {
+			long delay = Long.parseLong(interval.getText()) * 1000;
+			
+			autoProcessor.schedule(new TimerTask() {
+				public void run() {
+					if (!running) manualProcess.doClick();
+				}
+			}, delay);
+		}
 	}
 }

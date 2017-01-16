@@ -1,6 +1,8 @@
 package nara_bid_information;
 
 import java.awt.BorderLayout;
+import java.awt.Image;
+import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.io.IOException;
@@ -16,6 +18,8 @@ import java.util.Date;
 import java.util.Timer;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
@@ -56,7 +60,6 @@ public class PeriodicUpdater extends JFrame implements ProgressTracker {
 	
 	String type;
 	boolean running;
-	boolean finished;
 	ArrayList<String> dates;
 	
 	public PeriodicUpdater(String sd, String ed, String type) throws ParseException {
@@ -74,7 +77,6 @@ public class PeriodicUpdater extends JFrame implements ProgressTracker {
 		
 		this.type = type;
 		running = false;
-		finished = false;
 		dates = new ArrayList<String>();
 		
 		autoCheck = new JCheckBox("자동");
@@ -146,6 +148,9 @@ public class PeriodicUpdater extends JFrame implements ProgressTracker {
 		    }
 		});
 		
+		Toolkit toolkit = Toolkit.getDefaultToolkit();
+		Image icon = toolkit.getImage("nara.png");
+		this.setIconImage(icon);
 		this.add(panel);
 		this.setSize(300, 600);
 		this.setResizable(false);
@@ -184,7 +189,7 @@ public class PeriodicUpdater extends JFrame implements ProgressTracker {
 				if (sdate.equals(edate)) {
 					dates.add(forq.format(sdate.getTime()));
 				}
-			} while (edate.after(sdate) && dates.size() < 12);
+			} while (edate.after(sdate));
 			return dates;
 		}
 		
@@ -236,15 +241,17 @@ public class PeriodicUpdater extends JFrame implements ProgressTracker {
 							sc.add(Calendar.DAY_OF_MONTH, -1);
 							em = sdf.format(sc.getTime());
 							reader = new OpenAPIReader(sm, em, "결과", reference);
-							rs = st.executeQuery("SELECT COUNT(*) FROM narabidinfo WHERE 실제개찰일시 BETWEEN \"" + sm + " 00:00:00\" AND \"" + em + " 23:59:59\" AND 결과완료=1;");
+							//rs = st.executeQuery("SELECT COUNT(*) FROM narabidinfo WHERE 실제개찰일시 BETWEEN \"" + sm + " 00:00:00\" AND \"" + em + " 23:59:59\" AND 결과완료=1;");
+							rs = st.executeQuery("SELECT counter FROM naracounter WHERE openDate BETWEEN \"" + sm + "\" AND \"" + em + "\";");
 						}
 						else if (type.equals("일자별")) {
 							reader = new OpenAPIReader(sm, sm, "결과", reference);
-							rs = st.executeQuery("SELECT COUNT(*) FROM narabidinfo WHERE 실제개찰일시 BETWEEN \"" + sm + " 00:00:00\" AND \"" + sm + " 23:59:59\" AND 결과완료=1;");
+							//rs = st.executeQuery("SELECT COUNT(*) FROM narabidinfo WHERE 실제개찰일시 BETWEEN \"" + sm + " 00:00:00\" AND \"" + sm + " 23:59:59\" AND 결과완료=1;");
+							rs = st.executeQuery("SELECT counter FROM naracounter WHERE openDate=\"" + sm + "\"");
 						}
 						
-						if (rs.next()) {
-							dbcount = rs.getInt(1);
+						while (rs.next()) {
+							dbcount += rs.getInt(1);
 						}
 						svcount = reader.checkTotal();
 						if (type.equals("월별")) sm = sm.substring(0, sm.length()-3);
@@ -258,10 +265,10 @@ public class PeriodicUpdater extends JFrame implements ProgressTracker {
 							states.add(false);
 						}
 						if (diff < 0) {
-							/*
-							String sql = "DELETE FROM narabidinfo WHERE 실제개찰일시 BETWEEN \"" + sm + " 00:00:00\" AND "
-									+ "\"" + sm + " 23:59:59\" AND 개찰결과=\"재입찰\" AND 결과완료=1;";
-							*/
+							reader.setOption("차수");
+							readers.add(reader);
+							es.submit(reader);
+							states.add(false);
 						}
 					}
 					
@@ -273,15 +280,21 @@ public class PeriodicUpdater extends JFrame implements ProgressTracker {
 						running = true;
 					}
 				} catch (ClassNotFoundException | SQLException | ParseException | IOException e1) {
+					Logger.getGlobal().log(Level.WARNING, e1.getMessage(), e1);
 					e1.printStackTrace();
 				}
+			}
+			else {
+				System.out.println("Can't start now!");
 			}
 		}
 	}
 	
 	private class AutoListener implements ActionListener {
 		public void actionPerformed(ActionEvent e) {
-			
+			if ( (!running) && autoCheck.isSelected() ) {
+				manualProcess.doClick();
+			}
 		}
 	}
 
@@ -298,6 +311,8 @@ public class PeriodicUpdater extends JFrame implements ProgressTracker {
 			states.remove(0);
 			
 			if (states.isEmpty()) {
+				System.out.println("Gracefully finished");
+				
 				Calendar endCalendar = Calendar.getInstance();
 				SimpleDateFormat dateFormatter = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
 				endTime.setText("처리종료: " + dateFormatter.format(endCalendar.getTime()));
@@ -307,15 +322,14 @@ public class PeriodicUpdater extends JFrame implements ProgressTracker {
 			}
 		}
 		else {
+			System.out.println("WTF finished");
+			
 			Calendar endCalendar = Calendar.getInstance();
 			SimpleDateFormat dateFormatter = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
 			endTime.setText("처리종료: " + dateFormatter.format(endCalendar.getTime()));
-			finished = true;
+			readers.clear();
+			running = false;
 		}
-	}
-	
-	public boolean isFinished() {
-		return finished;
 	}
 }
 

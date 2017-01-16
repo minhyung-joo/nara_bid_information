@@ -3,6 +3,7 @@ package nara_bid_information;
 import java.awt.Dimension;
 import java.awt.Frame;
 import java.awt.GridLayout;
+import java.awt.Image;
 import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -10,6 +11,8 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import java.util.prefs.Preferences;
 
 import javax.swing.JComponent;
@@ -59,6 +62,9 @@ public class MainFrame extends JFrame {
 		
 		adjustSize();
 		
+		Toolkit toolkit = Toolkit.getDefaultToolkit();
+		Image icon = toolkit.getImage("nara.png");
+		this.setIconImage(icon);
 		this.setTitle("나라장터 입찰정보");
 		this.setExtendedState(Frame.MAXIMIZED_BOTH);
 		this.setVisible(true);
@@ -102,11 +108,20 @@ public class MainFrame extends JFrame {
 				UpdaterFrame baseFrame = new UpdaterFrame("기초금액", anchorDate);
 			}
 		});
-		prePriceDownload = new JMenuItem("복수가격");
+		prePriceDownload = new JMenuItem("예비가격");
 		prePriceDownload.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
+				SimpleDateFormat formatter = new SimpleDateFormat("yyyy-MM-dd");
+				Date anchorDate = null;
+				try {
+					anchorDate = formatter.parse(Resources.START_DATE);
+				} catch (ParseException e1) {
+					Logger.getGlobal().log(Level.WARNING, e1.getMessage(), e1);
+					e1.printStackTrace();
+				}
+				
 				@SuppressWarnings("unused")
-				UpdaterFrame preFrame = new UpdaterFrame("예비가격", null);
+				UpdaterFrame preFrame = new UpdaterFrame("예비가격", anchorDate);
 			}
 		});
 		negoDownload = new JMenuItem("협상에의한건처리");
@@ -117,6 +132,7 @@ public class MainFrame extends JFrame {
 				try {
 					anchorDate = formatter.parse(Resources.START_DATE);
 				} catch (ParseException e1) {
+					Logger.getGlobal().log(Level.WARNING, e1.getMessage(), e1);
 					e1.printStackTrace();
 				}
 				
@@ -132,6 +148,7 @@ public class MainFrame extends JFrame {
 				try {
 					anchorDate = formatter.parse(Resources.START_DATE);
 				} catch (ParseException e1) {
+					Logger.getGlobal().log(Level.WARNING, e1.getMessage(), e1);
 					e1.printStackTrace();
 				}
 				
@@ -156,6 +173,7 @@ public class MainFrame extends JFrame {
 					@SuppressWarnings("unused")
 					PeriodicUpdater monthUpdater = new PeriodicUpdater(null, null, "월별");
 				} catch (ParseException e1) {
+					Logger.getGlobal().log(Level.WARNING, e1.getMessage(), e1);
 					e1.printStackTrace();
 				}
 			}
@@ -167,6 +185,7 @@ public class MainFrame extends JFrame {
 					@SuppressWarnings("unused")
 					PeriodicUpdater dayUpdater = new PeriodicUpdater(null, null, "일자별");
 				} catch (ParseException e1) {
+					Logger.getGlobal().log(Level.WARNING, e1.getMessage(), e1);
 					e1.printStackTrace();
 				}
 			}

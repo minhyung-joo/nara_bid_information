@@ -10,6 +10,8 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -34,7 +36,8 @@ public class OpenAPIReader implements Runnable {
 		PRE_PRICE,
 		PERIODIC,
 		REBID,
-		NEGO
+		NEGO,
+		DIFF
 	}
 	
 	// For SQL setup.
@@ -50,6 +53,7 @@ public class OpenAPIReader implements Runnable {
 	
 	ProgressTracker tracker;
 	int totalItem;
+	boolean checkOnly;
 	
 	public OpenAPIReader(String sd, String ed, String op, ProgressTracker pt) {
 		if (sd.length() == 10) sd = sd.replaceAll("-", "");
@@ -97,7 +101,7 @@ public class OpenAPIReader implements Runnable {
 			String month = d.substring(4, 6);
 			String day = d.substring(6, 8);
 			
-			return year + "-" + month + "-" + day + " 00:00:00";
+			return year + "-" + month + "-" + day;
 		}
 		else return "";
 	}
@@ -144,7 +148,7 @@ public class OpenAPIReader implements Runnable {
 		}
 		
 		path += "serviceKey=" + SERVER_KEY;
-		path += "&numOfRows=" + NUM_OF_ROWS;
+		if (!checkOnly) path += "&numOfRows=" + NUM_OF_ROWS;
 		
 		return path;
 	}
@@ -229,6 +233,9 @@ public class OpenAPIReader implements Runnable {
 			break;
 		case "협상":
 			option = Option.NEGO;
+			break;
+		case "차수":
+			option = Option.DIFF;
 			break;
 		}
 	}
@@ -345,6 +352,7 @@ public class OpenAPIReader implements Runnable {
 									+ "입찰방식=\"" + bidType + "\", "
 									+ "면허제한=\"" + license + "\", "
 									+ "계약방법=\"" + compType + "\", 공고완료=1";
+							if (compType.contains("협상")) sql += ", 협상건=1";
 							if (rebid.equals("N")) sql += ", 재입찰완료=1";
 							if (!priceMethod.equals("복수예가")) sql += ", 기초완료=1";
 							if (priceMethod.equals("비예가")) sql += ", 복수완료=1";
@@ -396,6 +404,7 @@ public class OpenAPIReader implements Runnable {
 								+ "입찰방식=\"" + bidType + "\", "
 								+ "면허제한=\"" + license + "\", "
 								+ "계약방법=\"" + compType + "\", 공고완료=1";
+						if (compType.contains("협상")) sql += ", 협상건=1";
 						if (rebid.equals("N")) sql += ", 재입찰완료=1";
 						if (!priceMethod.equals("복수예가")) sql += ", 기초완료=1";
 						if (priceMethod.equals("비예가") || priceMethod.equals("")) sql += ", 복수완료=1";
@@ -491,6 +500,21 @@ public class OpenAPIReader implements Runnable {
 				sql += " " + where;
 				System.out.println(sql);
 				st.executeUpdate(sql);
+				
+				String checkDate = openDate.substring(0, 10);
+				sql = "SELECT openDate FROM naracounter WHERE openDate=\"" + checkDate + "\"";
+				rs = st.executeQuery(sql);
+				
+				if (rs.next()) {
+					sql = "UPDATE naracounter SET counter=counter+1 WHERE openDate=\"" + checkDate + "\"";
+					System.out.println(sql);
+					st.executeUpdate(sql);
+				}
+				else {
+					sql = "INSERT INTO naracounter (openDate, counter) VALUES (\"" + checkDate + "\", 1)";
+					System.out.println(sql);
+					st.executeUpdate(sql);
+				}
 			}
 		}
 		
@@ -518,7 +542,7 @@ public class OpenAPIReader implements Runnable {
 		String sd = parseDate(startDate);
 		String ed = parseDate(endDate);
 		String sql = "SELECT DISTINCT 입찰공고번호 FROM narabidinfo WHERE 업무=\"" + t + "\" AND "
-				+ "예정개찰일시 BETWEEN \"" + sd + "\" AND \"" + ed + "\" AND "
+				+ "예정개찰일시 BETWEEN \"" + sd + " 00:00:00\" AND \"" + ed + " 23:59:59\" AND "
 				+ "공고완료=1 AND 기초완료=0;";
 		rs = st.executeQuery(sql);
 		
@@ -551,8 +575,8 @@ public class OpenAPIReader implements Runnable {
 				
 				sql = "UPDATE narabidinfo SET 난이도계수=\"" + level + "\", "
 						+ "기초예정가격=" + basePrice + ", "
-						+ "하한=\"" + lower + "\", "
-						+ "상한=\"" + upper + "\", 기초완료=1 " + where;
+						+ "하한수=\"" + lower + "\", "
+						+ "상한수=\"" + upper + "\", 기초완료=1 " + where;
 				System.out.println(sql);
 				st.executeUpdate(sql);
 			}
@@ -582,7 +606,7 @@ public class OpenAPIReader implements Runnable {
 		String sd = parseDate(startDate);
 		String ed = parseDate(endDate);
 		String sql = "SELECT DISTINCT 입찰공고번호 FROM narabidinfo WHERE 업무=\"" + t + "\" AND "
-				+ "실제개찰일시 BETWEEN \"" + sd + "\" AND \"" + ed + "\" AND "
+				+ "실제개찰일시 BETWEEN \"" + sd + " 00:00:00\" AND \"" + ed + " 23:59:59\" AND "
 				+ "결과완료=1 AND 복수완료=0;";
 		rs = st.executeQuery(sql);
 		
@@ -713,12 +737,15 @@ public class OpenAPIReader implements Runnable {
 					+ "입찰분류=" + category;
 			
 			sql = "SELECT 예정개찰일시, 발주기관, 수요기관, 입찰방식, 계약방법, 담당자, 집행관, 재입찰허용여부, 예비가격재작성여부, "
-					+ "면허제한, 예가방법, 총예가갯수, 추첨예가갯수, 지명경쟁, 기초예정가격, 하한, 상한, 난이도계수, 업무, 공고완료, 기초완료 FROM narabidinfo " + where;
+					+ "면허제한, 예가방법, 총예가갯수, 추첨예가갯수, 지명경쟁, 기초예정가격, 하한수, 상한수, 난이도계수, 업무, 공고완료, 기초완료 FROM narabidinfo " + where;
 			
 			rs = st.executeQuery(sql);
 			
 			while (rs.next()) {
 				if (rs.getInt("공고완료") == 1) {
+					String lowerBound = rs.getString("하한수");
+					String upperBound = rs.getString("상한수");
+					
 					sql = "UPDATE narabidinfo SET 예정개찰일시=\"" + rs.getString("예정개찰일시") + "\", "
 							+ "발주기관=\"" + rs.getString("발주기관") + "\", "
 							+ "수요기관=\"" + rs.getString("수요기관") + "\", "
@@ -733,13 +760,14 @@ public class OpenAPIReader implements Runnable {
 							+ "총예가갯수=" + rs.getString("총예가갯수") + ", "
 							+ "추첨예가갯수=" + rs.getString("추첨예가갯수") + ", "
 							+ "지명경쟁=\"" + rs.getString("지명경쟁") + "\", "
-							+ "기초예정가격=" + rs.getString("기초예정가격") + ", "
-							+ "하한=\"" + rs.getString("하한") + "\", "
-							+ "상한=\"" + rs.getString("상한") + "\", "
-							+ "난이도계수=\"" + rs.getString("난이도계수") + "\", "
+							+ "기초예정가격=" + rs.getString("기초예정가격") + ", ";
+					if (lowerBound != null) sql += "하한수=\"" + rs.getString("하한수") + "\", ";
+					if (upperBound != null) sql += "상한수=\"" + rs.getString("상한수") + "\", ";
+					sql += "난이도계수=\"" + rs.getString("난이도계수") + "\", "
 							+ "업무=\"" + rs.getString("업무") + "\", "
 							+ "공고완료=" + rs.getString("공고완료") + ", "
 							+ "기초완료=" + rs.getString("기초완료") + " " + where;
+					System.out.println(sql);
 					st.executeUpdate(sql);
 					
 					break;
@@ -768,7 +796,7 @@ public class OpenAPIReader implements Runnable {
 		
 		setType(t);
 		
-		String sql = "SELECT DISTINCT 입찰공고번호 FROM narabidinfo WHERE 업무=\"" + t + "\" AND LEFT(계약방법, 2)=\"수의\" AND 결과완료=1 AND 복수완료=0";
+		String sql = "SELECT DISTINCT 입찰공고번호 FROM narabidinfo WHERE 업무=\"" + t + "\" AND 협상건=1 AND 결과완료=1 AND 복수완료=0";
 		rs = st.executeQuery(sql);
 		
 		while (rs.next()) {
@@ -813,11 +841,101 @@ public class OpenAPIReader implements Runnable {
 		closeDB();
 	}
 	
+	public void processDiff() throws ClassNotFoundException, SQLException, IOException {
+		totalItem = 0;
+		
+		setOption("결과");
+		
+		processDiff("물품");
+		processDiff("공사");
+		processDiff("용역");
+		processDiff("외자");
+	}
+	
+	public void processDiff(String t) throws SQLException, ClassNotFoundException, IOException {
+		connectDB();
+		
+		setType(t);
+		
+		ArrayList<String> bidNums = new ArrayList<String>();
+		ArrayList<String> bidVers = new ArrayList<String>();
+		ArrayList<String> rebidNums = new ArrayList<String>();
+		ArrayList<String> categories = new ArrayList<String>();
+		ArrayList<String> dates = new ArrayList<String>();
+		
+		String sd = parseDate(startDate);
+		String ed = parseDate(endDate);
+		String sql = "SELECT 입찰공고번호, 입찰공고차수, 재입찰번호, 입찰분류, 실제개찰일시 FROM narabidinfo WHERE 업무=\"" + t + "\" AND "
+				+ "실제개찰일시 BETWEEN \"" + sd + " 00:00:00\" AND \"" + ed + " 23:59:59\" AND 결과완료=1";
+		rs = st.executeQuery(sql);
+		
+		while (rs.next()) {
+			bidNums.add(rs.getString("입찰공고번호"));
+			bidVers.add(rs.getString("입찰공고차수"));
+			rebidNums.add(rs.getString("재입찰번호"));
+			categories.add(rs.getString("입찰분류"));
+			dates.add(rs.getString("실제개찰일시"));
+		}
+		
+		String path = buildDatePath();
+		Document doc = getResponse(path);
+		Element count = doc.getElementsByTag("totalCount").first();
+		int totalCount = Integer.parseInt(count.text());
+		totalItem += totalCount;
+		
+		Elements items = doc.getElementsByTag("item");
+		for (int i = 0; i < totalCount; i++) {
+			Element item = items.get(i);
+			
+			String bidnum = item.getElementsByTag("입찰공고번호").text();
+			String bidver = item.getElementsByTag("입찰공고차수").text();
+			String rebidno = item.getElementsByTag("재입찰번호").text();
+			String category = item.getElementsByTag("입찰분류").text();
+			
+			String key = bidnum + bidver + rebidno + category;
+			String dbKey = bidNums.get(0) + bidVers.get(0) + rebidNums.get(0) + categories.get(0);
+			
+			int index = 0;
+			while ( (!key.equals(dbKey)) && (index < bidNums.size()) ) {
+				index++;
+				dbKey = bidNums.get(index) + bidVers.get(index) + rebidNums.get(index) + categories.get(index);
+			}
+			
+			if (index < bidNums.size()) {
+				bidNums.remove(index);
+				bidVers.remove(index);
+				rebidNums.remove(index);
+				categories.remove(index);
+				dates.remove(index);
+			}
+		}
+		
+		// Remove items not matched
+		for (int i = 0; i < bidNums.size(); i++) {
+			String where = "WHERE 입찰공고번호=\"" + bidNums.get(i) + "\" AND "
+					+ "입찰공고차수=\"" + bidVers.get(i) + "\" AND "
+					+ "재입찰번호=" + rebidNums.get(i) + " AND "
+					+ "입찰분류=" + categories.get(i);
+			
+			sql = "DELETE FROM narabidinfo " + where;
+			System.out.println(sql);
+			st.executeUpdate(sql);
+			
+			sql = "UPDATE naracounter SET counter=counter-1 WHERE openDate=\"" + dates.get(i).substring(0, 10) + "\"";
+			System.out.println(sql);
+			st.executeUpdate(sql);
+		}
+		
+		closeDB();
+	}
+	
 	public int getTotal() {
 		return totalItem;
 	}
 
 	public void run() {
+		checkOnly = false;
+		
 		try {
 			switch(option) {
 			case NOTI:
@@ -842,16 +960,21 @@ public class OpenAPIReader implements Runnable {
 			case NEGO:
 				processNegoPrice();
 				break;
+			case DIFF:
+				processDiff();
+				break;
 			}
 		} catch (Exception e) {
+			Logger.getGlobal().log(Level.WARNING, e.getMessage(), e);
 			e.printStackTrace();
 		} finally {
-			tracker.finish();
+			if (tracker != null) tracker.finish();
 		}
 	}
 
 	public int checkTotal() throws IOException {
 		int total = 0;
+		checkOnly = true;
 		
 		setType("물품");
 		String path = buildDatePath();

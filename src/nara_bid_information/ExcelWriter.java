@@ -34,12 +34,18 @@ public class ExcelWriter {
 	String today;
 	String workType;
 	String org;
+	String lowerBound;
+	String upperBound;
+	boolean negoFlag;
 	
-	public ExcelWriter(String org, String workType) {
+	public ExcelWriter(String org, String workType, String lowerBound, String upperBound) {
 		defaultPath = "F:/";
 		basePath = Resources.BASE_PATH;
 		this.workType = workType;
 		this.org = org;
+		this.lowerBound = lowerBound;
+		this.upperBound = upperBound;
+		negoFlag = false;
 		
 		workbook = new HSSFWorkbook();
 		sheet = workbook.createSheet("입찰정보");
@@ -50,6 +56,10 @@ public class ExcelWriter {
 		today = sdf.format(new Date()) + " 00:00:00";
 	}
 	
+	public void setNego(boolean nego) {
+		negoFlag = nego;
+	}
+	
 	public void connectDB() throws ClassNotFoundException, SQLException {
 		Class.forName("com.mysql.jdbc.Driver");
 		con = DriverManager.getConnection("jdbc:mysql://localhost/" + Resources.SCHEMA, Resources.DB_ID, Resources.DB_PW);
@@ -58,7 +68,7 @@ public class ExcelWriter {
 	}
 	
 	public void adjustColumns() {
-		for (int i = 0; i < 54; i++) {
+		for (int i = 0; i < 53; i++) {
 			if (i == 3) sheet.setColumnWidth(i, 1000);
 			else {
 				sheet.autoSizeColumn(i);
@@ -118,7 +128,6 @@ public class ExcelWriter {
 		columnNames.createCell(cellIndex++).setCellValue("재입찰");
 		columnNames.createCell(cellIndex++).setCellValue("집행관");
 		columnNames.createCell(cellIndex++).setCellValue("입회관");
-		columnNames.createCell(cellIndex++).setCellValue("복수예비가격 작성시각");
 		columnNames.createCell(cellIndex++).setCellValue("공고기관");
 		columnNames.createCell(cellIndex++).setCellValue("수요기관");
 		columnNames.createCell(cellIndex++).setCellValue("입찰방식");
@@ -131,6 +140,7 @@ public class ExcelWriter {
 	
 	public void toFile() throws IOException {
 		String name = "";
+		if (negoFlag) { name += "협상건 "; }
 		if (org != null) { name += org; }
 		if (workType == null) { name += "(전체)"; }
 		else { name += "(" + workType + ")"; }
@@ -168,20 +178,32 @@ public class ExcelWriter {
 		labelColumns();
 		
 		String sql = "SELECT * FROM narabidinfo WHERE ";
+		if (negoFlag) {
+			sql += "협상건=1 AND ";
+		}
 		if (!workType.equals("전체")) {
 			sql += "업무=\"" + workType + "\" AND ";
 		}
-		if (org != null) {
+		if (org != null && !org.equals("")) {
 			sql += "발주기관=\"" + org + "\" AND ";
+		}
+		if ( (lowerBound != null) && (upperBound != null) ) {
+			sql += "하한수=" + lowerBound + " AND 상한수=" + upperBound + " AND "; 
 		}
 		sql += "결과완료=1 ";
 		
 		sql += "UNION SELECT * FROM narabidinfo WHERE ";
+		if (negoFlag) {
+			sql += "협상건=1 AND ";
+		}
 		if (!workType.equals("전체")) {
 			sql += "업무=\"" + workType + "\" AND ";
 		}
-		if (org != null) {
+		if (org != null && !org.equals("")) {
 			sql += "발주기관=\"" + org + "\" AND ";
+		}
+		if ( (lowerBound != null) && (upperBound != null) ) {
+			sql += "하한수=" + lowerBound + " AND 상한수=" + upperBound + " AND "; 
 		}
 		sql += "예정개찰일시 >= \"" + today + "\" ORDER BY 예정개찰일시, 입찰공고번호;";
 		
@@ -340,15 +362,14 @@ public class ExcelWriter {
 			}
 			row.createCell(cellIndex++).setCellValue(rs.getString("집행관"));
 			row.createCell(cellIndex++).setCellValue(rs.getString("담당자"));
-			row.createCell(cellIndex++).setCellValue("");
 			row.createCell(cellIndex++).setCellValue(rs.getString("발주기관"));
 			row.createCell(cellIndex++).setCellValue(rs.getString("수요기관"));
 			row.createCell(cellIndex++).setCellValue(rs.getString("입찰방식"));
 			row.createCell(cellIndex++).setCellValue(rs.getString("계약방법"));
-			row.createCell(cellIndex++).setCellValue(workType);
+			row.createCell(cellIndex++).setCellValue(rs.getString("업무"));
 			row.createCell(cellIndex++).setCellValue(rs.getString("난이도계수"));
 			row.createCell(cellIndex++).setCellValue(rs.getString("예가방법"));
-			String rate = rs.getString("하한") + " ~ " + rs.getString("상한");                
+			String rate = rs.getString("하한수") + " ~ " + rs.getString("상한수");                
 			if (rate.equals("null ~ null")) rate = "-";
 			row.createCell(cellIndex++).setCellValue(rate);
 			index++;

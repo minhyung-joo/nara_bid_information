@@ -3,6 +3,8 @@ package nara_bid_information;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Font;
+import java.awt.Image;
+import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
@@ -86,7 +88,10 @@ public class OptionFrame extends JFrame {
 		mainPanel.add(centerPanel, BorderLayout.CENTER);
 		mainPanel.add(bottomPanel, BorderLayout.SOUTH);
 		
-		this.setSize(550, 300);
+		Toolkit toolkit = Toolkit.getDefaultToolkit();
+		Image icon = toolkit.getImage("nara.png");
+		this.setIconImage(icon);
+		this.setSize(550, 350);
 		this.setResizable(false);
 		this.add(mainPanel);
 		this.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
