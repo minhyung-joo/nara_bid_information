@@ -20,13 +20,14 @@ import org.jsoup.select.Elements;
 
 public class OpenAPIReader implements Runnable {
 	final String SERVER_KEY = Resources.SERVER_KEY;
-	final String NUM_OF_ROWS = "50000";
+	final String NUM_OF_ROWS = "2500";
 	
 	enum Type {
 		PROD,
 		FACIL,
 		SERV,
-		WEJA
+		WEJA, 
+		REWEJA
 	}
 	
 	enum Option {
@@ -54,6 +55,7 @@ public class OpenAPIReader implements Runnable {
 	ProgressTracker tracker;
 	int totalItem;
 	boolean checkOnly;
+	boolean incompleteProcess;
 	
 	public OpenAPIReader(String sd, String ed, String op, ProgressTracker pt) {
 		if (sd.length() == 10) sd = sd.replaceAll("-", "");
@@ -62,15 +64,13 @@ public class OpenAPIReader implements Runnable {
 		endDate = ed;
 		tracker = pt;
 		setOption(op);
+		incompleteProcess = false;
 	}
 	
-	public static void main(String args[]) throws ClassNotFoundException, IOException, SQLException {
-		OpenAPIReader tester = new OpenAPIReader("20131216", "20131216", null, null);
+	public static void main(String args[]) throws ClassNotFoundException, IOException, SQLException, InterruptedException {
+		OpenAPIReader tester = new OpenAPIReader("20131201", "20170121", "공고", null);
 		
-		tester.processNoti();
-		tester.processRes();
-		tester.processBasePrice();
-		tester.processPrePrice();
+		tester.processIncomplete();
 	}
 	
 	public void connectDB() throws SQLException, ClassNotFoundException {
@@ -84,6 +84,13 @@ public class OpenAPIReader implements Runnable {
 	public void closeDB() throws SQLException {
 		db_con.close();
 		st.close();
+	}
+	
+	public void setDate(String sd, String ed) {
+		if (sd.length() == 10) sd = sd.replaceAll("-", "");
+		if (ed.length() == 10) ed = ed.replaceAll("-", "");
+		startDate = sd;
+		endDate = ed;
 	}
 	
 	public String parseDate(String d) {
@@ -117,10 +124,13 @@ public class OpenAPIReader implements Runnable {
 		if (option == Option.NOTI) {
 			path = EndPoints.NOTI_BASE_PATH;
 			
-			if (type == Type.PROD) path += EndPoints.PROD_TOTAL_NOTI;
-			else if (type == Type.FACIL) path += EndPoints.FACIL_TOTAL_NOTI;
-			else if (type == Type.SERV) path += EndPoints.SERV_TOTAL_NOTI;
+			if (type == Type.PROD) path += EndPoints.PROD_NOTI;
+			else if (type == Type.FACIL) path += EndPoints.FACIL_NOTI;
+			else if (type == Type.SERV) path += EndPoints.SERV_NOTI;
 			else if (type == Type.WEJA) path += EndPoints.WEJA_NOTI;
+			
+			if (incompleteProcess) path += "inqryDiv=2&";
+			else path += "inqryDiv=1&";
 		}
 		else if (option == Option.RES) {
 			path = EndPoints.RES_BASE_PATH;
@@ -129,14 +139,18 @@ public class OpenAPIReader implements Runnable {
 			else if (type == Type.FACIL) path += EndPoints.FACIL_RES;
 			else if (type == Type.SERV) path += EndPoints.SERV_RES;
 			else if (type == Type.WEJA) path += EndPoints.WEJA_RES;
+			
+			path += "inqryDiv=3&";
 		}
 		else if (option == Option.BASE_PRICE) {
 			path = EndPoints.NOTI_BASE_PATH;
 			
-			if (type == Type.PROD) path += EndPoints.PROD_TOTAL_BASE_PRICE;
-			else if (type == Type.FACIL) path += EndPoints.FACIL_TOTAL_BASE_PRICE;
-			else if (type == Type.SERV) path += EndPoints.SERV_TOTAL_BASE_PRICE;
+			if (type == Type.PROD) path += EndPoints.PROD_BASE_PRICE;
+			else if (type == Type.FACIL) path += EndPoints.FACIL_BASE_PRICE;
+			else if (type == Type.SERV) path += EndPoints.SERV_BASE_PRICE;
 			else if (type == Type.WEJA) path += EndPoints.WEJA_BASE_PRICE;
+			
+			path += "inqryDiv=2&";
 		}
 		else if (option == Option.PRE_PRICE) {
 			path = EndPoints.RES_BASE_PATH;
@@ -145,9 +159,11 @@ public class OpenAPIReader implements Runnable {
 			else if (type == Type.FACIL) path += EndPoints.FACIL_PRE_PRICE;
 			else if (type == Type.SERV) path += EndPoints.SERV_PRE_PRICE;
 			else if (type == Type.WEJA) path += EndPoints.WEJA_PRE_PRICE;
+			
+			path += "inqryDiv=1&";
 		}
 		
-		path += "serviceKey=" + SERVER_KEY;
+		path += "ServiceKey=" + SERVER_KEY;
 		if (!checkOnly) path += "&numOfRows=" + NUM_OF_ROWS;
 		
 		return path;
@@ -156,8 +172,17 @@ public class OpenAPIReader implements Runnable {
 	public String buildDatePath() {
 		String path = buildPath();
 
-		path += "&sDate=" + startDate;
-		path += "&eDate=" + endDate;
+		path += "&inqryBgnDt=" + startDate + "0000";
+		path += "&inqryEndDt=" + endDate + "2359";
+		
+		return path;
+	}
+	
+	public String buildDatePath(String sd, String ed) {
+		String path = buildPath();
+
+		path += "&inqryBgnDt=" + sd;
+		path += "&inqryEndDt=" + ed;
 		
 		return path;
 	}
@@ -165,7 +190,19 @@ public class OpenAPIReader implements Runnable {
 	public String buildItemPath(String item) {
 		String path = buildPath();
 
-		path += "&bidNum=" + item;
+		path += "&bidNtceNo=" + item;
+		
+		return path;
+	}
+	
+	public String buildLicensePath(String item, String ver) {
+		String path = EndPoints.NOTI_BASE_PATH;
+		path += EndPoints.NOTI_LICENSE;
+		path += "inqryDiv=2";
+		path += "&bidNtceNo=" + item;
+		path += "&bidNtceOrd=" + ver;
+		path += "&ServiceKey=" + SERVER_KEY;
+		path += "&numOfRows=" + NUM_OF_ROWS;
 		
 		return path;
 	}
@@ -173,6 +210,7 @@ public class OpenAPIReader implements Runnable {
 	public Document getResponse(String path) throws IOException {
 		URL url = new URL(path);
 		HttpURLConnection con = (HttpURLConnection) url.openConnection();
+		con.setReadTimeout(0);
 		
 		con.setRequestMethod("GET");
 		con.setRequestProperty("User-Agent", "Mozilla/5.0");
@@ -208,6 +246,9 @@ public class OpenAPIReader implements Runnable {
 		case "외자":
 			type = Type.WEJA;
 			break;
+		case "외자재공고":
+			type = Type.REWEJA;
+			break;
 		}
 	}
 	
@@ -240,7 +281,7 @@ public class OpenAPIReader implements Runnable {
 		}
 	}
 	
-	public void processNoti() throws IOException, ClassNotFoundException, SQLException {
+	public void processNoti() throws IOException, ClassNotFoundException, SQLException, InterruptedException {
 		totalItem = 0;
 		
 		setOption("공고");
@@ -251,7 +292,7 @@ public class OpenAPIReader implements Runnable {
 		processNoti("외자");
 	}
 	
-	public void processNoti(String t) throws IOException, ClassNotFoundException, SQLException {
+	public void processNoti(String t) throws IOException, ClassNotFoundException, SQLException, InterruptedException {
 		connectDB();
 		
 		setType(t);
@@ -259,116 +300,79 @@ public class OpenAPIReader implements Runnable {
 		String path = buildDatePath();
 		Document doc = getResponse(path);
 		Element count = doc.getElementsByTag("totalCount").first();
+		while ( count.text().equals("") ) {
+			Thread.sleep(500);
+			doc = getResponse(path);
+		}
 		int totalCount = Integer.parseInt(count.text());
 		totalItem += totalCount;
 		
+		int index = 0;
+		int page = 1;
 		Elements items = doc.getElementsByTag("item");
 		for (int i = 0; i < totalCount; i++) {
 			if (tracker != null) tracker.updateProgress(); 
 			
-			Element item = items.get(i);
+			Element item = items.get(index);
 			boolean complete = false;
 			
-			String bidnum = item.getElementsByTag("입찰공고번호").first().text();
-			String bidver = item.getElementsByTag("입찰공고차수").first().text();
+			String bidnum = item.getElementsByTag("bidNtceNo").first().text(); // 입찰공고번호
+			String bidver = item.getElementsByTag("bidNtceOrd").first().text(); // 입찰공고차수
 			String rebidno = "0"; // 재입찰번호
-			String category = "0"; // 입찰분류
-			String openDate = parseDate(item.getElementsByTag("개찰일시").text());
-			String notiType = item.getElementsByTag("공고종류").text();
-			String damdang = item.getElementsByTag("담당자명").text();
-			String notiorg = item.getElementsByTag("발주기관").text();
-			String demorg = item.getElementsByTag("수요기관명").text();
-			String rebid = item.getElementsByTag("재입찰허용여부").text();
-			String jimyung = item.getElementsByTag("지명경쟁").text();
-			String exec = item.getElementsByTag("집행관명").text();
-			String priceNumber = parseNumber(item.getElementsByTag("총예가갯수").text());
-			String selectNumber = parseNumber(item.getElementsByTag("추첨예가갯수").text());
-			String bidType = item.getElementsByTag("입찰방식").text();
-			String compType = item.getElementsByTag("계약방법명").text();
-			String reprice = item.getElementsByTag("예비가격재작성여부").text();
-			String priceMethod = item.getElementsByTag("예가방법").text();
+			String category = (type == Type.PROD) ? "1" : "0"; // 입찰분류
+			String openDate = item.getElementsByTag("opengDt").text(); // 개찰일시
+			String notiType = item.getElementsByTag("ntceKindNm").text(); // 공고종류
+			String damdang = item.getElementsByTag("ntceInsttOfclNm").text(); // 담당자명
+			String notiorg = item.getElementsByTag("ntceInsttNm").text(); // 공고기관명
+			String demorg = item.getElementsByTag("dminsttNm").text(); // 수요기관명
+			String rebid = item.getElementsByTag("rbidPermsnYn").text(); // 재입찰허용여부
+			String jimyung = item.getElementsByTag("dsgntCmptYn").text(); // 지명경쟁
+			String exec = item.getElementsByTag("exctvNm").text(); // 집행관명
+			String priceNumber = parseNumber(item.getElementsByTag("totPrdprcNum").text()); // 총예가갯수
+			String selectNumber = parseNumber(item.getElementsByTag("drwtPrdprcNum").text()); // 추첨예가수
+			String bidType = item.getElementsByTag("bidMethdNm").text(); // 입찰방식명
+			String compType = item.getElementsByTag("cntrctCnclsMthdNm").text(); // 계약방법
+			String reprice = item.getElementsByTag("rsrvtnPrceReMkngMthdNm").text(); // 예가재작성여부
+			String priceMethod = item.getElementsByTag("prearngPrceDcsnMthdNm").text(); // 예가방식
+			String bidRate = item.getElementsByTag("sucsfbidLwltRate").text(); // 낙찰하한율
 			
 			String license = "";
-			for (int k = 1; k <= 12; k++) {
-				String key = "면허제한명" + k;
-				Elements licenseCheck = item.getElementsByTag(key);
-				if (licenseCheck.size() > 0) {
-					String check = licenseCheck.first().text();
-					if (!check.equals("/")) {
-						license += check;
-					}
-				}
+			String licensePath = buildLicensePath(bidnum, bidver);
+			Document licenseDoc = getResponse(licensePath);
+			Element countDiv = licenseDoc.getElementsByTag("totalCount").first();
+			while ( countDiv.text().equals("") ) {
+				Thread.sleep(500);
+				licenseDoc = getResponse(licensePath);
 			}
-			if (license.length() > 200) {
-				license = license.substring(0, 200);
-			}
+			int licenseCount = Integer.parseInt(countDiv.text());
 			
-			if (!notiType.equals("재입찰")) {
-				Elements buyCheck = item.getElementsByTag("구매대상물품전체");
-				if ( buyCheck.size() > 0 ) {
-					String buyInfo = buyCheck.first().text();
-					String buyInfos[] = buyInfo.split("##");
-					for (int j = 0; j < buyInfos.length; j++) {
-						String details[] = buyInfos[j].split("\\^");
-						category = details[0];
-						
-						String where = "WHERE 입찰공고번호=\"" + bidnum + "\" AND "
-								+ "입찰공고차수=\"" + bidver + "\" AND "
-								+ "재입찰번호=" + rebidno + " AND "
-								+ "입찰분류=" + category;
-							
-						String sql = "SELECT 입찰공고번호, 공고완료 FROM narabidinfo " + where;
-						rs = st.executeQuery(sql);
-						if (rs.next()) {
-							int finished = rs.getInt("공고완료");
-							if (finished == 1) {
-								complete = true;
-							}
-						}
-						else {
-							sql = "INSERT INTO narabidinfo (입찰공고번호, 입찰공고차수, 재입찰번호, 입찰분류) VALUES ("
-									+ "\"" + bidnum + "\", "
-									+ "\"" + bidver + "\", "
-									+ rebidno + ", "
-									+ category + ");";
-							System.out.println(sql);
-							st.executeUpdate(sql);
-						}
-						
-						if (!complete) {
-							sql = "UPDATE narabidinfo SET 예정개찰일시=\"" + openDate + "\", "
-									+ "공고종류=\"" + notiType + "\", "
-									+ "업무=\"" + t + "\", "
-									+ "담당자=\"" + damdang + "\", "
-									+ "발주기관=\"" + notiorg + "\", "
-									+ "수요기관=\"" + demorg + "\", "
-									+ "재입찰허용여부=\"" + rebid + "\", "
-									+ "예비가격재작성여부=\"" + reprice + "\", "
-									+ "예가방법=\"" + priceMethod + "\", "
-									+ "지명경쟁=\"" + jimyung + "\", "
-									+ "집행관=\"" + exec + "\", "
-									+ "총예가갯수=" + priceNumber + ", "
-									+ "추첨예가갯수=" + selectNumber + ", "
-									+ "입찰방식=\"" + bidType + "\", "
-									+ "면허제한=\"" + license + "\", "
-									+ "계약방법=\"" + compType + "\", 공고완료=1";
-							if (compType.contains("협상")) sql += ", 협상건=1";
-							if (rebid.equals("N")) sql += ", 재입찰완료=1";
-							if (!priceMethod.equals("복수예가")) sql += ", 기초완료=1";
-							if (priceMethod.equals("비예가")) sql += ", 복수완료=1";
-							sql += " " + where;
-							
-							System.out.println(sql);
-							st.executeUpdate(sql);
-						}
-					}
+			Elements licenseItems = licenseDoc.getElementsByTag("item");
+			for (int j = 0; j < licenseCount; j++) {
+				Element licenseItem = licenseItems.get(j);
+				String licenseText = licenseItem.getElementsByTag("lcnsLmtNm").text(); 
+				if (!licenseText.equals("")) {
+					license += "[" + licenseText + "] ";
 				}
-				else {
+			}
+			if (license.length() > 200) license = license.substring(0, 200);
+			
+			Elements buyCheck = item.getElementsByTag("purchsObjPrdctList"); // 구매대상물품목록
+			if ( (buyCheck.size() > 0) && buyCheck.text().length() > 2 ) {
+				String buyInfo = buyCheck.first().text();
+				buyInfo = buyInfo.replaceAll(",", "");
+				String buyInfos[] = buyInfo.split("\\]");
+				for (int j = 0; j < buyInfos.length; j++) {
+					complete = false;
+					
+					String detail = buyInfos[j];
+					detail = detail.substring(1);
+					category = detail.split("\\^")[0];
+					
 					String where = "WHERE 입찰공고번호=\"" + bidnum + "\" AND "
 							+ "입찰공고차수=\"" + bidver + "\" AND "
 							+ "재입찰번호=" + rebidno + " AND "
 							+ "입찰분류=" + category;
-					
+						
 					String sql = "SELECT 입찰공고번호, 공고완료 FROM narabidinfo " + where;
 					rs = st.executeQuery(sql);
 					if (rs.next()) {
@@ -386,41 +390,85 @@ public class OpenAPIReader implements Runnable {
 						System.out.println(sql);
 						st.executeUpdate(sql);
 					}
-					
-					if (!complete) {
-						sql = "UPDATE narabidinfo SET 예정개찰일시=\"" + openDate + "\", "
-								+ "공고종류=\"" + notiType + "\", "
-								+ "업무=\"" + t + "\", "
-								+ "담당자=\"" + damdang + "\", "
-								+ "발주기관=\"" + notiorg + "\", "
-								+ "수요기관=\"" + demorg + "\", "
-								+ "재입찰허용여부=\"" + rebid + "\", "
-								+ "예비가격재작성여부=\"" + reprice + "\", "
-								+ "예가방법=\"" + priceMethod + "\", "
-								+ "지명경쟁=\"" + jimyung + "\", "
-								+ "집행관=\"" + exec + "\", "
-								+ "총예가갯수=" + priceNumber + ", "
-								+ "추첨예가갯수=" + selectNumber + ", "
-								+ "입찰방식=\"" + bidType + "\", "
-								+ "면허제한=\"" + license + "\", "
-								+ "계약방법=\"" + compType + "\", 공고완료=1";
-						if (compType.contains("협상")) sql += ", 협상건=1";
-						if (rebid.equals("N")) sql += ", 재입찰완료=1";
-						if (!priceMethod.equals("복수예가")) sql += ", 기초완료=1";
-						if (priceMethod.equals("비예가") || priceMethod.equals("")) sql += ", 복수완료=1";
-						sql += " " + where;
-						
-						System.out.println(sql);
-						st.executeUpdate(sql);
+				}
+			}
+			else {
+				String where = "WHERE 입찰공고번호=\"" + bidnum + "\" AND "
+						+ "입찰공고차수=\"" + bidver + "\" AND "
+						+ "재입찰번호=" + rebidno + " AND "
+						+ "입찰분류=" + category;
+				
+				String sql = "SELECT 입찰공고번호, 공고완료 FROM narabidinfo " + where;
+				rs = st.executeQuery(sql);
+				if (rs.next()) {
+					int finished = rs.getInt("공고완료");
+					if (finished == 1) {
+					complete = true;
 					}
 				}
+				else {
+					sql = "INSERT INTO narabidinfo (입찰공고번호, 입찰공고차수, 재입찰번호, 입찰분류) VALUES ("
+							+ "\"" + bidnum + "\", "
+							+ "\"" + bidver + "\", "
+							+ rebidno + ", "
+							+ category + ");";
+					System.out.println(sql);
+					st.executeUpdate(sql);
+				}
+			}
+				
+			if (!complete) {
+				String where = "WHERE 입찰공고번호=\"" + bidnum + "\" AND "
+						+ "입찰공고차수=\"" + bidver + "\"";
+				
+				String sql = "UPDATE narabidinfo SET 예정개찰일시=\"" + openDate + "\", "
+						+ "공고종류=\"" + notiType + "\", "
+						+ "업무=\"" + t + "\", "
+						+ "담당자=\"" + damdang + "\", "
+						+ "발주기관=\"" + notiorg + "\", "
+						+ "수요기관=\"" + demorg + "\", "
+						+ "재입찰허용여부=\"" + rebid + "\", "
+						+ "예비가격재작성여부=\"" + reprice + "\", "
+						+ "예가방법=\"" + priceMethod + "\", "
+						+ "지명경쟁=\"" + jimyung + "\", "
+						+ "집행관=\"" + exec + "\", "
+						+ "총예가갯수=" + priceNumber + ", "
+						+ "추첨예가갯수=" + selectNumber + ", "
+						+ "입찰방식=\"" + bidType + "\", "
+						+ "낙찰하한율=\"" + bidRate + "\", "
+						+ "면허제한=\"" + license + "\", "
+						+ "계약방법=\"" + compType + "\", 공고완료=1";
+				if (compType.contains("협상")) sql += ", 협상건=1";
+				if (rebid.equals("N")) sql += ", 재입찰완료=1";
+				if (!priceMethod.equals("복수예가")) sql += ", 기초완료=1";
+				if (priceMethod.equals("비예가") || priceMethod.equals("")) sql += ", 복수완료=1";
+				sql += " " + where;
+				
+				System.out.println(sql);
+				st.executeUpdate(sql);
+			}
+			
+			if ( (index + 1) % Integer.parseInt(NUM_OF_ROWS) == 0) {
+				page++;
+				index = 0;
+				
+				String newPath = path + "&pageNo=" + page;
+				doc = getResponse(newPath);
+				while (doc.getElementsByTag("item").size() < 1) {
+					Thread.sleep(500);
+					doc = getResponse(newPath);
+				}
+				items = doc.getElementsByTag("item");
+			}
+			else {
+				index++;
 			}
 		}
 		
 		closeDB();
 	}
 	
-	public void processRes() throws IOException, ClassNotFoundException, SQLException {
+	public void processRes() throws IOException, ClassNotFoundException, SQLException, InterruptedException {
 		totalItem = 0;
 		
 		setOption("결과");
@@ -431,7 +479,7 @@ public class OpenAPIReader implements Runnable {
 		processRes("외자");
 	}
 	
-	public void processRes(String t) throws IOException, ClassNotFoundException, SQLException {
+	public void processRes(String t) throws IOException, ClassNotFoundException, SQLException, InterruptedException {
 		connectDB();
 		
 		setType(t);
@@ -439,20 +487,26 @@ public class OpenAPIReader implements Runnable {
 		String path = buildDatePath();
 		Document doc = getResponse(path);
 		Element count = doc.getElementsByTag("totalCount").first();
+		while ( count.text().equals("") ) {
+			Thread.sleep(500);
+			doc = getResponse(path);
+		}
 		int totalCount = Integer.parseInt(count.text());
 		totalItem += totalCount;
 		
+		int index = 0;
+		int page = 1;
 		Elements items = doc.getElementsByTag("item");
 		for (int i = 0; i < totalCount; i++) {
 			if (tracker != null) tracker.updateProgress(); 
 			
-			Element item = items.get(i);
+			Element item = items.get(index);
 			boolean complete = false;
 			
-			String bidnum = item.getElementsByTag("입찰공고번호").text();
-			String bidver = item.getElementsByTag("입찰공고차수").text();
-			String rebidno = item.getElementsByTag("재입찰번호").text();
-			String category = item.getElementsByTag("입찰분류").text();
+			String bidnum = item.getElementsByTag("bidNtceNo").text(); // 입찰공고번호
+			String bidver = item.getElementsByTag("bidNtceOrd").text(); // 입찰공고차수
+			String rebidno = item.getElementsByTag("rbidNo").text(); // 재입찰번호
+			String category = item.getElementsByTag("bidClsfcNo").text(); // 입찰분류
 			
 			String where = "WHERE 입찰공고번호=\"" + bidnum + "\" AND "
 					+ "입찰공고차수=\"" + bidver + "\" AND "
@@ -478,21 +532,26 @@ public class OpenAPIReader implements Runnable {
 			}
 			
 			if (!complete) {
-				String openDate = parseDate(item.getElementsByTag("개찰일시").text());
-				String hasPrice = item.getElementsByTag("예비가격파일존재여부").text();
-				String winner = item.getElementsByTag("순위업체정보").text();
-				String result = item.getElementsByTag("진행구분코드").text();
-				String comp = item.getElementsByTag("참가자수").text();
+				String openDate = item.getElementsByTag("opengDt").text(); // 예정개찰일시
+				String realDate = item.getElementsByTag("inptDt").text(); // 실제개찰일시
+				String winner = item.getElementsByTag("opengCorpInfo").text(); // 순위업체정보
+				String result = item.getElementsByTag("progrsDivCdNm").text(); // 진행구분코드
+				String comp = item.getElementsByTag("prtcptCnum").text(); // 참가자수
+				String notiOrg = item.getElementsByTag("ntceInsttNm").text(); // 발주기관
+				String demOrg = item.getElementsByTag("dminsttNm").text(); // 수요기관
 				
-				String winnerInfo[] = winner.split("###");
 				String bidPrice = "0";
+				String winnerInfo[] = winner.split("\\^");
+				if (winnerInfo.length == 5) bidPrice = winnerInfo[3];
 				if (winnerInfo.length == 3) bidPrice = winnerInfo[1];
 				if (bidPrice.equals("")) bidPrice = "0";
 				
-				sql = "UPDATE narabidinfo SET 실제개찰일시=\"" + openDate + "\", "
-						+ "예비가격파일존재여부=\"" + hasPrice + "\", "
+				sql = "UPDATE narabidinfo SET 예정개찰일시=\"" + openDate + "\", "
+						+ "실제개찰일시=\"" + realDate + "\", "
 						+ "진행구분코드=\"" + result + "\", "
 						+ "업무=\"" + t + "\", "
+						+ "발주기관=\"" + notiOrg + "\", "
+						+ "수요기관=\"" + demOrg + "\", "
 						+ "투찰금액=\"" + bidPrice + "\", "
 						+ "참가자수=\"" + comp + "\", 결과완료=1";
 				if (result.equals("유찰")) sql += ", 복수완료=1, 재입찰완료=1";
@@ -516,12 +575,28 @@ public class OpenAPIReader implements Runnable {
 					st.executeUpdate(sql);
 				}
 			}
+			
+			if ( (index + 1) % Integer.parseInt(NUM_OF_ROWS) == 0) {
+				page++;
+				index = 0;
+				
+				String newPath = path + "&pageNo=" + page;
+				doc = getResponse(newPath);
+				while (doc.getElementsByTag("item").size() < 1) {
+					Thread.sleep(500);
+					doc = getResponse(newPath);
+				}
+				items = doc.getElementsByTag("item");
+			}
+			else {
+				index++;
+			}
 		}
 		
 		closeDB();
 	}
 	
-	public void processBasePrice() throws IOException, ClassNotFoundException, SQLException {
+	public void processBasePrice() throws IOException, ClassNotFoundException, SQLException, InterruptedException {
 		totalItem = 0;
 		
 		setOption("기초금액");
@@ -532,7 +607,7 @@ public class OpenAPIReader implements Runnable {
 		processBasePrice("외자");
 	}
 	
-	public void processBasePrice(String t) throws IOException, ClassNotFoundException, SQLException {
+	public void processBasePrice(String t) throws IOException, ClassNotFoundException, SQLException, InterruptedException {
 		connectDB();
 		
 		ArrayList<String> bidNums = new ArrayList<String>();
@@ -557,19 +632,23 @@ public class OpenAPIReader implements Runnable {
 			if (tracker != null) tracker.updateProgress();
 			
 			Document doc = getResponse(path);
+			while (doc.getElementsByTag("errMsg").size() > 0) {
+				Thread.sleep(500);
+				doc = getResponse(path);
+			}
 			int totalCount = Integer.parseInt(doc.getElementsByTag("totalCount").text());
 			
 			Elements items = doc.getElementsByTag("item");
 			for (int i = 0; i < totalCount; i++) {
 				Element item = items.get(i);
 				
-				String bidver = item.getElementsByTag("입찰공고차수").text();
-				String series = item.getElementsByTag("입찰분류").text();
-				String level = item.getElementsByTag("난이도계수").text();
-				String basePrice = item.getElementsByTag("기초예정가격").text();
+				String bidver = item.getElementsByTag("bidNtceOrd").text(); // 입찰공고차수
+				String series = item.getElementsByTag("bidClsfcNo").text(); // 입찰분류
+				String level = item.getElementsByTag("dfcltydgrCfcnt").text(); // 난이도계수
+				String basePrice = item.getElementsByTag("bssamt").text(); // 기초예정가격
 				if (basePrice.equals("")) basePrice = "0";
-				String lower = item.getElementsByTag("예비가격범위from").text();
-				String upper = item.getElementsByTag("예비가격범위to").text();
+				String lower = item.getElementsByTag("rsrvtnPrceRngBgnRate").text(); // 하한
+				String upper = item.getElementsByTag("rsrvtnPrceRngEndRate").text(); // 상한
 				
 				String where = "WHERE 입찰공고번호=\"" + bidNum + "\" AND 입찰공고차수=\"" + bidver + "\" AND 입찰분류=" + series;
 				
@@ -585,7 +664,7 @@ public class OpenAPIReader implements Runnable {
 		closeDB();
 	}
 	
-	public void processPrePrice() throws IOException, ClassNotFoundException, SQLException {
+	public void processPrePrice() throws IOException, ClassNotFoundException, SQLException, InterruptedException {
 		totalItem = 0;
 		
 		setOption("예비가격");
@@ -596,54 +675,166 @@ public class OpenAPIReader implements Runnable {
 		processPrePrice("외자");
 	}
 	
-	public void processPrePrice(String t) throws IOException, ClassNotFoundException, SQLException {
+	public void processPrePrice(String t) throws IOException, ClassNotFoundException, SQLException, InterruptedException {
 		connectDB();
 		
-		ArrayList<String> bidNums = new ArrayList<String>();
+		ArrayList<String> dates = new ArrayList<String>();
 		
 		setType(t);
 		
 		String sd = parseDate(startDate);
 		String ed = parseDate(endDate);
-		String sql = "SELECT DISTINCT 입찰공고번호 FROM narabidinfo WHERE 업무=\"" + t + "\" AND "
-				+ "실제개찰일시 BETWEEN \"" + sd + " 00:00:00\" AND \"" + ed + " 23:59:59\" AND "
+		String sql = "SELECT DISTINCT 예정개찰일시 FROM narabidinfo WHERE 업무=\"" + t + "\" AND "
+				+ "예정개찰일시 BETWEEN \"" + sd + " 00:00:00\" AND \"" + ed + " 23:59:59\" AND "
 				+ "결과완료=1 AND 복수완료=0;";
 		rs = st.executeQuery(sql);
 		
 		while (rs.next()) {
-			bidNums.add(rs.getString("입찰공고번호"));
+			dates.add(rs.getString("예정개찰일시"));
 		}
 		
-		totalItem += bidNums.size();
-		for (String bidNum : bidNums) {
-			String path = buildItemPath(bidNum);
+		totalItem += dates.size();
+		for (String date : dates) {
+			date = date.substring(0, 10).replaceAll("-", "") + date.substring(11, 16).replaceAll(":", "");
+			System.out.println(date);
+			
+			String path = buildDatePath(date, date);
 			
 			Document doc = getResponse(path);
+			while (doc.getElementsByTag("errMsg").size() > 0) {
+				Thread.sleep(500);
+				doc = getResponse(path);
+			}
 			int totalCount = Integer.parseInt(doc.getElementsByTag("totalCount").text());
-			if (totalCount > 15) totalCount = 15;
 			
 			if (tracker != null) tracker.updateProgress();
 			
+			int num = 0;
+			int page = 1;
 			Elements items = doc.getElementsByTag("item");
 			for (int i = 0; i < totalCount; i++) {
-				Element item = items.get(i);
+				Element item = items.get(num);
 				
-				String bidver = item.getElementsByTag("입찰공고차수").text();
-				String series = item.getElementsByTag("입찰분류").text();
-				String rebidno = item.getElementsByTag("재입찰번호").text();
-				String index = item.getElementsByTag("일련번호").text();
-				String priceNum = item.getElementsByTag("총예가갯수").text();
+				String bidNum = item.getElementsByTag("bidNtceNo").text();
+				String bidver = item.getElementsByTag("bidNtceOrd").text(); // 입찰공고차수
+				String series = item.getElementsByTag("bidClsfcNo").text(); // 입찰분류
+				String rebidno = item.getElementsByTag("rbidNo").text(); // 재입찰번호
+				String index = item.getElementsByTag("compnoRsrvtnPrceSno").text(); // 순번
+				String drawNum = item.getElementsByTag("drwtNum").text(); // 추첨횟수
+				String priceNum = item.getElementsByTag("totRsrvtnPrceNum").text(); // 총예가갯수
 				if (priceNum.equals("")) priceNum = "0";
-				String dupPrice = item.getElementsByTag("기초예정가격").text();
+				String dupPrice = item.getElementsByTag("bsisPlnprc").text(); // 복수예가
 				if (dupPrice.equals("")) dupPrice = "0";
-				String expPrice = item.getElementsByTag("예정가격금액").text();
+				String expPrice = item.getElementsByTag("plnprc").text(); // 예정가격
 				if (expPrice.equals("")) expPrice = "0";
+				String basePrice = item.getElementsByTag("bssamt").text(); // 기초금액
+				if (basePrice.equals("")) basePrice = "0";
+				String priceDate = item.getElementsByTag("compnoRsrvtnPrceMkngDt").text(); // 복수예가 작성일시
 				
 				String where = "WHERE 입찰공고번호=\"" + bidNum + "\" AND 입찰공고차수=\"" + bidver + "\" AND 재입찰번호=" + rebidno + " AND 입찰분류=" + series;
 				if (!index.equals("")) {
 					sql = "UPDATE narabidinfo SET 총예가갯수=" + priceNum + ", "
 							+ "복수" + index + "=" + dupPrice + ", "
+							+ "복참" + index + "=" + drawNum + ", "
+							+ "기초예정가격=" + basePrice + ", "
+							+ "예정가격=" + expPrice + " ";
+					if (!priceDate.equals("")) sql += ", 복수예가작성일시=\"" + priceDate + "\" ";
+					if (index.equals(priceNum)) sql += ", 복수완료=1 ";
+					sql += where;
+					System.out.println(sql);
+					st.executeUpdate(sql);
+				}
+				else {
+					sql = "UPDATE narabidinfo SET 총예가갯수=" + priceNum + ", "
 							+ "예정가격=" + expPrice + ", 복수완료=1 " + where;
+					System.out.println(sql);
+					st.executeUpdate(sql);
+				}
+				
+				if ( (num + 1) % Integer.parseInt(NUM_OF_ROWS) == 0) {
+					page++;
+					num = 0;
+					
+					String newPath = path + "&pageNo=" + page;
+					doc = getResponse(newPath);
+					while (doc.getElementsByTag("item").size() < 1) {
+						Thread.sleep(500);
+						doc = getResponse(newPath);
+					}
+					items = doc.getElementsByTag("item");
+				}
+				else {
+					num++;
+				}
+			}
+			
+			Thread.sleep(200);
+		}
+		
+		/*
+		setType(t);
+		
+		String path = buildDatePath();
+		Document doc = getResponse(path);
+		Element count = doc.getElementsByTag("totalCount").first();
+		while ( count.text().equals("") ) {
+			Thread.sleep(500);
+			doc = getResponse(path);
+		}
+		int totalCount = Integer.parseInt(count.text());
+		totalItem += totalCount;
+		
+		int index = 0;
+		int page = 1;
+		Elements items = doc.getElementsByTag("item");
+		for (int i = 0; i < totalCount; i++) {
+			if (tracker != null) tracker.updateProgress(); 
+			
+			Element item = items.get(index);
+			boolean complete = false;
+			
+			String bidnum = item.getElementsByTag("bidNtceNo").text(); // 입찰공고번호
+			String bidver = item.getElementsByTag("bidNtceOrd").text(); // 입찰공고차수
+			String rebidno = item.getElementsByTag("rbidNo").text(); // 재입찰번호
+			String category = item.getElementsByTag("bidClsfcNo").text(); // 입찰분류
+			
+			String where = "WHERE 입찰공고번호=\"" + bidnum + "\" AND "
+					+ "입찰공고차수=\"" + bidver + "\" AND "
+					+ "재입찰번호=" + rebidno + " AND "
+					+ "입찰분류=" + category;
+				
+			String sql = "SELECT 복수완료 FROM narabidinfo " + where;
+			rs = st.executeQuery(sql);
+			if (rs.next()) {
+				int finished = rs.getInt("복수완료");
+				if (finished == 1) {
+					complete = true;
+				}
+			}
+			
+			if (!complete) {
+				String dupNum = item.getElementsByTag("compnoRsrvtnPrceSno").text(); // 순번
+				String drawNum = item.getElementsByTag("drwtNum").text(); // 추첨횟수
+				String priceNum = item.getElementsByTag("totRsrvtnPrceNum").text(); // 총예가갯수
+				if (priceNum.equals("")) priceNum = "0";
+				String dupPrice = item.getElementsByTag("bsisPlnprc").text(); // 복수예가
+				if (dupPrice.equals("")) dupPrice = "0";
+				String expPrice = item.getElementsByTag("plnprc").text(); // 예정가격
+				if (expPrice.equals("")) expPrice = "0";
+				String basePrice = item.getElementsByTag("bssamt").text(); // 기초금액
+				if (basePrice.equals("")) basePrice = "0";
+				String priceDate = item.getElementsByTag("compnoRsrvtnPrceMkngDt").text(); // 복수예가 작성일시
+				
+				where = "WHERE 입찰공고번호=\"" + bidnum + "\" AND 입찰공고차수=\"" + bidver + "\" AND 재입찰번호=" + rebidno + " AND 입찰분류=" + category;
+				if (!dupNum.equals("")) {
+					sql = "UPDATE narabidinfo SET 총예가갯수=" + priceNum + ", "
+							+ "복수" + dupNum + "=" + dupPrice + ", "
+							+ "복참" + dupNum + "=" + drawNum + ", "
+							+ "기초예정가격=" + basePrice + ", "
+							+ "예정가격=" + expPrice + " ";
+					if (!priceDate.equals("")) sql += ", 복수예가작성일시=\"" + priceDate + "\" ";
+					if (dupNum.equals(priceNum)) sql += ", 복수완료=1 ";
+					sql += where;
 					System.out.println(sql);
 					st.executeUpdate(sql);
 				}
@@ -654,7 +845,24 @@ public class OpenAPIReader implements Runnable {
 					st.executeUpdate(sql);
 				}
 			}
+			
+			if ( (index + 1) % Integer.parseInt(NUM_OF_ROWS) == 0) {
+				page++;
+				index = 0;
+				
+				String newPath = path + "&pageNo=" + page;
+				doc = getResponse(newPath);
+				while (doc.getElementsByTag("item").size() < 1) {
+					Thread.sleep(500);
+					doc = getResponse(newPath);
+				}
+				items = doc.getElementsByTag("item");
+			}
+			else {
+				index++;
+			}
 		}
+		*/
 		
 		closeDB();
 	}
@@ -924,6 +1132,217 @@ public class OpenAPIReader implements Runnable {
 			sql = "UPDATE naracounter SET counter=counter-1 WHERE openDate=\"" + dates.get(i).substring(0, 10) + "\"";
 			System.out.println(sql);
 			st.executeUpdate(sql);
+		}
+		
+		closeDB();
+	}
+	
+	public void processIncomplete() throws SQLException, IOException, InterruptedException, ClassNotFoundException {
+		totalItem = 0;
+		incompleteProcess = true;
+		
+		setOption("공고");
+		
+		processIncomplete("물품");
+		processIncomplete("공사");
+		processIncomplete("용역");
+		processIncomplete("외자");
+	}
+	
+	public void processIncomplete(String t) throws SQLException, IOException, InterruptedException, ClassNotFoundException {
+		connectDB();
+		
+		ArrayList<String> bidNums = new ArrayList<String>();
+		
+		setType(t);
+		
+		String sd = parseDate(startDate);
+		String ed = parseDate(endDate);
+		String sql = "SELECT DISTINCT 입찰공고번호 FROM narabidinfo WHERE 업무=\"" + t + "\" AND "
+				+ "예정개찰일시 BETWEEN \"" + sd + " 00:00:00\" AND \"" + ed + " 23:59:59\" AND "
+				+ "결과완료=1 AND 공고완료=0;";
+		rs = st.executeQuery(sql);
+		
+		while (rs.next()) {
+			bidNums.add(rs.getString("입찰공고번호"));
+		}
+		
+		totalItem += bidNums.size();
+		for (String bidNum : bidNums) {
+			sql = "UPDATE narabidinfo SET 공고완료=0 WHERE 입찰공고번호=\"" + bidNum + "\"";
+			System.out.println(sql);
+			st.executeUpdate(sql);
+			
+			String path = buildItemPath(bidNum);
+			
+			Document doc = getResponse(path);
+			while (doc.getElementsByTag("errMsg").size() > 0) {
+				Thread.sleep(500);
+				doc = getResponse(path);
+			}
+			int totalCount = Integer.parseInt(doc.getElementsByTag("totalCount").text());
+			if (totalCount > 15) totalCount = 15;
+			
+			if (tracker != null) tracker.updateProgress();
+			
+			int index = 0;
+			int page = 1;
+			Elements items = doc.getElementsByTag("item");
+			for (int i = 0; i < totalCount; i++) {
+				if (tracker != null) tracker.updateProgress(); 
+				
+				Element item = items.get(index);
+				boolean complete = false;
+				
+				String bidnum = item.getElementsByTag("bidNtceNo").first().text(); // 입찰공고번호
+				String bidver = item.getElementsByTag("bidNtceOrd").first().text(); // 입찰공고차수
+				String rebidno = "0"; // 재입찰번호
+				String category = (type == Type.PROD) ? "1" : "0"; // 입찰분류
+				String openDate = item.getElementsByTag("opengDt").text(); // 개찰일시
+				String notiType = item.getElementsByTag("ntceKindNm").text(); // 공고종류
+				String damdang = item.getElementsByTag("ntceInsttOfclNm").text(); // 담당자명
+				String notiorg = item.getElementsByTag("ntceInsttNm").text(); // 공고기관명
+				String demorg = item.getElementsByTag("dminsttNm").text(); // 수요기관명
+				String rebid = item.getElementsByTag("rbidPermsnYn").text(); // 재입찰허용여부
+				String jimyung = item.getElementsByTag("dsgntCmptYn").text(); // 지명경쟁
+				String exec = item.getElementsByTag("exctvNm").text(); // 집행관명
+				String priceNumber = parseNumber(item.getElementsByTag("totPrdprcNum").text()); // 총예가갯수
+				String selectNumber = parseNumber(item.getElementsByTag("drwtPrdprcNum").text()); // 추첨예가수
+				String bidType = item.getElementsByTag("bidMethdNm").text(); // 입찰방식명
+				String compType = item.getElementsByTag("cntrctCnclsMthdNm").text(); // 계약방법
+				String reprice = item.getElementsByTag("rsrvtnPrceReMkngMthdNm").text(); // 예가재작성여부
+				String priceMethod = item.getElementsByTag("prearngPrceDcsnMthdNm").text(); // 예가방식
+				String bidRate = item.getElementsByTag("sucsfbidLwltRate").text(); // 낙찰하한율
+				
+				String license = item.getElementsByTag("mainCnsttyNm").text();
+				if (!license.equals("")) {
+					for (int k = 1; k <= 9; k++) {
+						String key = "subsiCnsttyNm1" + k;
+						Elements licenseCheck = item.getElementsByTag(key);
+						if (licenseCheck.size() > 0) {
+							String check = licenseCheck.first().text();
+							if (!check.equals("")) {
+								license += ", " + check;
+							}
+							else {
+								break;
+							}
+						}
+					}
+					if (license.length() > 200) {
+						license = license.substring(0, 200);
+					}
+				}
+				
+				Elements buyCheck = item.getElementsByTag("purchsObjPrdctList"); // 구매대상물품목록
+				if ( (buyCheck.size() > 0) && buyCheck.text().length() > 2 ) {
+					String buyInfo = buyCheck.first().text();
+					buyInfo = buyInfo.replaceAll(",", "");
+					String buyInfos[] = buyInfo.split("\\]");
+					for (int j = 0; j < buyInfos.length; j++) {
+						complete = false;
+						
+						String detail = buyInfos[j];
+						detail = detail.substring(1);
+						category = detail.split("\\^")[0];
+						
+						String where = "WHERE 입찰공고번호=\"" + bidnum + "\" AND "
+								+ "입찰공고차수=\"" + bidver + "\" AND "
+								+ "재입찰번호=" + rebidno + " AND "
+								+ "입찰분류=" + category;
+							
+						sql = "SELECT 입찰공고번호, 공고완료 FROM narabidinfo " + where;
+						rs = st.executeQuery(sql);
+						if (rs.next()) {
+							int finished = rs.getInt("공고완료");
+							if (finished == 1) {
+								complete = true;
+							}
+						}
+						else {
+							sql = "INSERT INTO narabidinfo (입찰공고번호, 입찰공고차수, 재입찰번호, 입찰분류) VALUES ("
+									+ "\"" + bidnum + "\", "
+									+ "\"" + bidver + "\", "
+									+ rebidno + ", "
+									+ category + ");";
+							System.out.println(sql);
+							st.executeUpdate(sql);
+						}
+					}
+				}
+				else {
+					String where = "WHERE 입찰공고번호=\"" + bidnum + "\" AND "
+							+ "입찰공고차수=\"" + bidver + "\" AND "
+							+ "재입찰번호=" + rebidno + " AND "
+							+ "입찰분류=" + category;
+					
+					sql = "SELECT 입찰공고번호, 공고완료 FROM narabidinfo " + where;
+					rs = st.executeQuery(sql);
+					if (rs.next()) {
+						int finished = rs.getInt("공고완료");
+						if (finished == 1) {
+						complete = true;
+						}
+					}
+					else {
+						sql = "INSERT INTO narabidinfo (입찰공고번호, 입찰공고차수, 재입찰번호, 입찰분류) VALUES ("
+								+ "\"" + bidnum + "\", "
+								+ "\"" + bidver + "\", "
+								+ rebidno + ", "
+								+ category + ");";
+						System.out.println(sql);
+						st.executeUpdate(sql);
+					}
+				}
+				
+				if (!complete) {
+					String where = "WHERE 입찰공고번호=\"" + bidnum + "\" AND "
+							+ "입찰공고차수=\"" + bidver + "\" AND "
+							+ "입찰분류=" + category;
+					
+					sql = "UPDATE narabidinfo SET 예정개찰일시=\"" + openDate + "\", "
+							+ "공고종류=\"" + notiType + "\", "
+							+ "업무=\"" + t + "\", "
+							+ "담당자=\"" + damdang + "\", "
+							+ "발주기관=\"" + notiorg + "\", "
+							+ "수요기관=\"" + demorg + "\", "
+							+ "재입찰허용여부=\"" + rebid + "\", "
+							+ "예비가격재작성여부=\"" + reprice + "\", "
+							+ "예가방법=\"" + priceMethod + "\", "
+							+ "지명경쟁=\"" + jimyung + "\", "
+							+ "집행관=\"" + exec + "\", "
+							+ "총예가갯수=" + priceNumber + ", "
+							+ "추첨예가갯수=" + selectNumber + ", "
+							+ "입찰방식=\"" + bidType + "\", "
+							+ "낙찰하한율=\"" + bidRate + "\", "
+							+ "면허제한=\"" + license + "\", "
+							+ "계약방법=\"" + compType + "\", 공고완료=1";
+					if (compType.contains("협상")) sql += ", 협상건=1";
+					if (rebid.equals("N")) sql += ", 재입찰완료=1";
+					if (!priceMethod.equals("복수예가")) sql += ", 기초완료=1";
+					if (priceMethod.equals("비예가") || priceMethod.equals("")) sql += ", 복수완료=1";
+					sql += " " + where;
+						
+					System.out.println(sql);
+					st.executeUpdate(sql);
+				}
+				
+				if ( (index + 1) % Integer.parseInt(NUM_OF_ROWS) == 0) {
+					page++;
+					index = 0;
+				
+					String newPath = path + "&pageNo=" + page;
+					doc = getResponse(newPath);
+					while (doc.getElementsByTag("item").size() < 1) {
+						Thread.sleep(500);
+						doc = getResponse(newPath);
+					}
+					items = doc.getElementsByTag("item");
+				}
+				else {
+					index++;
+				}
+			}
 		}
 		
 		closeDB();

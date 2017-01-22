@@ -128,6 +128,7 @@ public class ExcelWriter {
 		columnNames.createCell(cellIndex++).setCellValue("재입찰");
 		columnNames.createCell(cellIndex++).setCellValue("집행관");
 		columnNames.createCell(cellIndex++).setCellValue("입회관");
+		columnNames.createCell(cellIndex++).setCellValue("복수예비가격 작성시각");
 		columnNames.createCell(cellIndex++).setCellValue("공고기관");
 		columnNames.createCell(cellIndex++).setCellValue("수요기관");
 		columnNames.createCell(cellIndex++).setCellValue("입찰방식");
@@ -288,49 +289,49 @@ public class ExcelWriter {
 			dupPriceCell15.setCellValue(rs.getLong("복수15"));
 			HSSFCell dupComCell1 = (HSSFCell) row.createCell(cellIndex++);
 			dupComCell1.setCellStyle(money);
-			dupComCell1.setCellValue("");
+			dupComCell1.setCellValue(rs.getInt("복참1"));
 			HSSFCell dupComCell2 = (HSSFCell) row.createCell(cellIndex++);
 			dupComCell2.setCellStyle(money);
-			dupComCell2.setCellValue("");
+			dupComCell2.setCellValue(rs.getInt("복참2"));
 			HSSFCell dupComCell3 = (HSSFCell) row.createCell(cellIndex++);
 			dupComCell3.setCellStyle(money);
-			dupComCell3.setCellValue("");
+			dupComCell3.setCellValue(rs.getInt("복참3"));
 			HSSFCell dupComCell4 = (HSSFCell) row.createCell(cellIndex++);
 			dupComCell4.setCellStyle(money);
-			dupComCell4.setCellValue("");
+			dupComCell4.setCellValue(rs.getInt("복참4"));
 			HSSFCell dupComCell5 = (HSSFCell) row.createCell(cellIndex++);
 			dupComCell5.setCellStyle(money);
-			dupComCell5.setCellValue("");
+			dupComCell5.setCellValue(rs.getInt("복참5"));
 			HSSFCell dupComCell6 = (HSSFCell) row.createCell(cellIndex++);
 			dupComCell6.setCellStyle(money);
-			dupComCell6.setCellValue("");
+			dupComCell6.setCellValue(rs.getInt("복참6"));
 			HSSFCell dupComCell7 = (HSSFCell) row.createCell(cellIndex++);
 			dupComCell7.setCellStyle(money);
-			dupComCell7.setCellValue("");
+			dupComCell7.setCellValue(rs.getInt("복참7"));
 			HSSFCell dupComCell8 = (HSSFCell) row.createCell(cellIndex++);
 			dupComCell8.setCellStyle(money);
-			dupComCell8.setCellValue("");
+			dupComCell8.setCellValue(rs.getInt("복참8"));
 			HSSFCell dupComCell9 = (HSSFCell) row.createCell(cellIndex++);
 			dupComCell9.setCellStyle(money);
-			dupComCell9.setCellValue("");
+			dupComCell9.setCellValue(rs.getInt("복참9"));
 			HSSFCell dupComCell10 = (HSSFCell) row.createCell(cellIndex++);
 			dupComCell10.setCellStyle(money);
-			dupComCell10.setCellValue("");
+			dupComCell10.setCellValue(rs.getInt("복참10"));
 			HSSFCell dupComCell11 = (HSSFCell) row.createCell(cellIndex++);
 			dupComCell11.setCellStyle(money);
-			dupComCell11.setCellValue("");
+			dupComCell11.setCellValue(rs.getInt("복참11"));
 			HSSFCell dupComCell12 = (HSSFCell) row.createCell(cellIndex++);
 			dupComCell12.setCellStyle(money);
-			dupComCell12.setCellValue("");
+			dupComCell12.setCellValue(rs.getInt("복참12"));
 			HSSFCell dupComCell13 = (HSSFCell) row.createCell(cellIndex++);
 			dupComCell13.setCellStyle(money);
-			dupComCell13.setCellValue("");
+			dupComCell13.setCellValue(rs.getInt("복참13"));
 			HSSFCell dupComCell14 = (HSSFCell) row.createCell(cellIndex++);
 			dupComCell14.setCellStyle(money);
-			dupComCell14.setCellValue("");
+			dupComCell14.setCellValue(rs.getInt("복참14"));
 			HSSFCell dupComCell15 = (HSSFCell) row.createCell(cellIndex++);
 			dupComCell15.setCellStyle(money);
-			dupComCell15.setCellValue("");
+			dupComCell15.setCellValue(rs.getInt("복참15"));
 			row.createCell(cellIndex++).setCellValue(rs.getInt("참가자수"));
 			if (rs.getString("예정개찰일시") != null) {
 				String dd = rs.getString("예정개찰일시");
@@ -362,6 +363,14 @@ public class ExcelWriter {
 			}
 			row.createCell(cellIndex++).setCellValue(rs.getString("집행관"));
 			row.createCell(cellIndex++).setCellValue(rs.getString("담당자"));
+			if (rs.getString("복수예가작성일시") != null) {
+				String dd = rs.getString("복수예가작성일시");
+				dd = dd.substring(2,4) + dd.substring(5,7) + dd.substring(8,16);
+				row.createCell(cellIndex++).setCellValue(dd);
+			}
+			else {
+				row.createCell(cellIndex++).setCellValue("-");
+			}
 			row.createCell(cellIndex++).setCellValue(rs.getString("발주기관"));
 			row.createCell(cellIndex++).setCellValue(rs.getString("수요기관"));
 			row.createCell(cellIndex++).setCellValue(rs.getString("입찰방식"));

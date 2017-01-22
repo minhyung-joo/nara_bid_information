@@ -26,11 +26,11 @@ public class DatabaseManager {
 	public void resetCounter() throws SQLException {
 		ArrayList<String> dates = new ArrayList<String>();
 		
-		String sql = "SELECT 실제개찰일시 FROM narabidinfo WHERE 결과완료=1";
+		String sql = "SELECT 예정개찰일시 FROM narabidinfo WHERE 결과완료=1";
 		rs = st.executeQuery(sql);
 		
 		while (rs.next()) {
-			dates.add(rs.getString("실제개찰일시").substring(0, 10));
+			dates.add(rs.getString("예정개찰일시").substring(0, 10));
 		}
 		
 		for (String date : dates) {
