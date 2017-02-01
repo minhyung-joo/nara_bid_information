@@ -331,5 +331,13 @@ public class PeriodicUpdater extends JFrame implements ProgressTracker {
 			running = false;
 		}
 	}
+
+	public void restart() {
+		
+	}
+
+	public void updateProgress(int i) {
+		
+	}
 }
 

@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
+import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -56,6 +57,11 @@ public class OpenAPIReader implements Runnable {
 	int totalItem;
 	boolean checkOnly;
 	boolean incompleteProcess;
+	boolean restarted;
+	Type savedType;
+	int savedItem;
+	int savedIndex;
+	int savedPage;
 	
 	public OpenAPIReader(String sd, String ed, String op, ProgressTracker pt) {
 		if (sd.length() == 10) sd = sd.replaceAll("-", "");
@@ -65,6 +71,10 @@ public class OpenAPIReader implements Runnable {
 		tracker = pt;
 		setOption(op);
 		incompleteProcess = false;
+		restarted = false;
+		savedItem = 0;
+		savedIndex = 0;
+		savedPage = 1;
 	}
 	
 	public static void main(String args[]) throws ClassNotFoundException, IOException, SQLException, InterruptedException {
@@ -160,7 +170,7 @@ public class OpenAPIReader implements Runnable {
 			else if (type == Type.SERV) path += EndPoints.SERV_PRE_PRICE;
 			else if (type == Type.WEJA) path += EndPoints.WEJA_PRE_PRICE;
 			
-			path += "inqryDiv=1&";
+			path += "inqryDiv=2&";
 		}
 		
 		path += "ServiceKey=" + SERVER_KEY;
@@ -210,7 +220,7 @@ public class OpenAPIReader implements Runnable {
 	public Document getResponse(String path) throws IOException {
 		URL url = new URL(path);
 		HttpURLConnection con = (HttpURLConnection) url.openConnection();
-		con.setReadTimeout(0);
+		con.setReadTimeout(15000);
 		
 		con.setRequestMethod("GET");
 		con.setRequestProperty("User-Agent", "Mozilla/5.0");
@@ -286,33 +296,59 @@ public class OpenAPIReader implements Runnable {
 		
 		setOption("공고");
 		
-		processNoti("물품");
-		processNoti("공사");
-		processNoti("용역");
-		processNoti("외자");
+		if (!restarted) {
+			processNoti("물품");
+			processNoti("공사");
+			processNoti("용역");
+			processNoti("외자");
+		}
+		else {
+			if (savedType == Type.PROD) {
+				processNoti("물품");
+				processNoti("공사");
+				processNoti("용역");
+				processNoti("외자");
+			}
+			else if (savedType == Type.FACIL) {
+				processNoti("공사");
+				processNoti("용역");
+				processNoti("외자");
+			}
+			else if (savedType == Type.FACIL) {
+				processNoti("용역");
+				processNoti("외자");
+			}
+			else {
+				processNoti("외자");
+			}
+		}
 	}
 	
 	public void processNoti(String t) throws IOException, ClassNotFoundException, SQLException, InterruptedException {
 		connectDB();
 		
 		setType(t);
+		savedType = type;
+		int page = (restarted) ? savedPage : 1;
 		
-		String path = buildDatePath();
+		String path = buildDatePath() + "&pageNo=" + page;
 		Document doc = getResponse(path);
 		Element count = doc.getElementsByTag("totalCount").first();
-		while ( count.text().equals("") ) {
+		while ( count == null || count.text().equals("") ) {
 			Thread.sleep(500);
 			doc = getResponse(path);
+			count = doc.getElementsByTag("totalCount").first();
 		}
 		int totalCount = Integer.parseInt(count.text());
 		totalItem += totalCount;
 		
-		int index = 0;
-		int page = 1;
+		int index = (restarted) ? savedIndex : 0;
 		Elements items = doc.getElementsByTag("item");
-		for (int i = 0; i < totalCount; i++) {
-			if (tracker != null) tracker.updateProgress(); 
+		int i = (restarted) ? savedItem : 0;
+		for ( ; i < totalCount; i++) {
+			if (tracker != null) tracker.updateProgress(i); 
 			
+			savedItem = i;
 			Element item = items.get(index);
 			boolean complete = false;
 			
@@ -339,10 +375,11 @@ public class OpenAPIReader implements Runnable {
 			String license = "";
 			String licensePath = buildLicensePath(bidnum, bidver);
 			Document licenseDoc = getResponse(licensePath);
-			Element countDiv = licenseDoc.getElementsByTag("totalCount").first();
-			while ( countDiv.text().equals("") ) {
+			Element countDiv = licenseDoc.getElementsByTag("totalcount").first();
+			while ( countDiv == null || countDiv.text().equals("") ) {
 				Thread.sleep(500);
 				licenseDoc = getResponse(licensePath);
+				countDiv = licenseDoc.getElementsByTag("totalcount").first();
 			}
 			int licenseCount = Integer.parseInt(countDiv.text());
 			
@@ -451,6 +488,8 @@ public class OpenAPIReader implements Runnable {
 			if ( (index + 1) % Integer.parseInt(NUM_OF_ROWS) == 0) {
 				page++;
 				index = 0;
+				savedPage = page;
+				savedIndex = index;
 				
 				String newPath = path + "&pageNo=" + page;
 				doc = getResponse(newPath);
@@ -462,10 +501,13 @@ public class OpenAPIReader implements Runnable {
 			}
 			else {
 				index++;
+				savedIndex = index;
 			}
 		}
 		
 		closeDB();
+		savedIndex = 0;
+		savedPage = 1;
 	}
 	
 	public void processRes() throws IOException, ClassNotFoundException, SQLException, InterruptedException {
@@ -473,23 +515,47 @@ public class OpenAPIReader implements Runnable {
 		
 		setOption("결과");
 		
-		processRes("물품");
-		processRes("공사");
-		processRes("용역");
-		processRes("외자");
+		if (!restarted) {
+			processRes("물품");
+			processRes("공사");
+			processRes("용역");
+			processRes("외자");
+		}
+		else {
+			if (savedType == Type.PROD) {
+				processRes("물품");
+				processRes("공사");
+				processRes("용역");
+				processRes("외자");
+			}
+			else if (savedType == Type.FACIL) {
+				processRes("공사");
+				processRes("용역");
+				processRes("외자");
+			}
+			else if (savedType == Type.FACIL) {
+				processRes("용역");
+				processRes("외자");
+			}
+			else {
+				processRes("외자");
+			}
+		}
 	}
 	
 	public void processRes(String t) throws IOException, ClassNotFoundException, SQLException, InterruptedException {
 		connectDB();
 		
 		setType(t);
+		savedType = type;
 		
 		String path = buildDatePath();
 		Document doc = getResponse(path);
 		Element count = doc.getElementsByTag("totalCount").first();
-		while ( count.text().equals("") ) {
+		while ( count == null || count.text().equals("") ) {
 			Thread.sleep(500);
 			doc = getResponse(path);
+			count = doc.getElementsByTag("totalCount").first();	
 		}
 		int totalCount = Integer.parseInt(count.text());
 		totalItem += totalCount;
@@ -545,6 +611,7 @@ public class OpenAPIReader implements Runnable {
 				if (winnerInfo.length == 5) bidPrice = winnerInfo[3];
 				if (winnerInfo.length == 3) bidPrice = winnerInfo[1];
 				if (bidPrice.equals("")) bidPrice = "0";
+				if (!Resources.isNumeric(bidPrice)) bidPrice = "0";
 				
 				sql = "UPDATE narabidinfo SET 예정개찰일시=\"" + openDate + "\", "
 						+ "실제개찰일시=\"" + realDate + "\", "
@@ -601,10 +668,32 @@ public class OpenAPIReader implements Runnable {
 		
 		setOption("기초금액");
 		
-		processBasePrice("물품");
-		processBasePrice("공사");
-		processBasePrice("용역");
-		processBasePrice("외자");
+		if (!restarted) {
+			processBasePrice("물품");
+			processBasePrice("공사");
+			processBasePrice("용역");
+			processBasePrice("외자");
+		}
+		else {
+			if (savedType == Type.PROD) {
+				processBasePrice("물품");
+				processBasePrice("공사");
+				processBasePrice("용역");
+				processBasePrice("외자");
+			}
+			else if (savedType == Type.FACIL) {
+				processBasePrice("공사");
+				processBasePrice("용역");
+				processBasePrice("외자");
+			}
+			else if (savedType == Type.FACIL) {
+				processBasePrice("용역");
+				processBasePrice("외자");
+			}
+			else {
+				processBasePrice("외자");
+			}
+		}
 	}
 	
 	public void processBasePrice(String t) throws IOException, ClassNotFoundException, SQLException, InterruptedException {
@@ -613,6 +702,7 @@ public class OpenAPIReader implements Runnable {
 		ArrayList<String> bidNums = new ArrayList<String>();
 		
 		setType(t);
+		savedType = type;
 		
 		String sd = parseDate(startDate);
 		String ed = parseDate(endDate);
@@ -669,36 +759,60 @@ public class OpenAPIReader implements Runnable {
 		
 		setOption("예비가격");
 		
-		processPrePrice("물품");
-		processPrePrice("공사");
-		processPrePrice("용역");
-		processPrePrice("외자");
+		if (!restarted) {
+			processPrePrice("물품");
+			processPrePrice("공사");
+			processPrePrice("용역");
+			processPrePrice("외자");
+		}
+		else {
+			if (savedType == Type.PROD) {
+				processPrePrice("물품");
+				processPrePrice("공사");
+				processPrePrice("용역");
+				processPrePrice("외자");
+			}
+			else if (savedType == Type.FACIL) {
+				processPrePrice("공사");
+				processPrePrice("용역");
+				processPrePrice("외자");
+			}
+			else if (savedType == Type.SERV) {
+				processPrePrice("용역");
+				processPrePrice("외자");
+			}
+			else processPrePrice("외자");
+		}
 	}
 	
 	public void processPrePrice(String t) throws IOException, ClassNotFoundException, SQLException, InterruptedException {
 		connectDB();
 		
-		ArrayList<String> dates = new ArrayList<String>();
+		ArrayList<String> bidNums = new ArrayList<String>();
 		
 		setType(t);
+		savedType = type;
 		
 		String sd = parseDate(startDate);
 		String ed = parseDate(endDate);
-		String sql = "SELECT DISTINCT 예정개찰일시 FROM narabidinfo WHERE 업무=\"" + t + "\" AND "
-				+ "예정개찰일시 BETWEEN \"" + sd + " 00:00:00\" AND \"" + ed + " 23:59:59\" AND "
+		String sql = "SELECT DISTINCT 입찰공고번호 FROM narabidinfo WHERE 업무=\"" + t + "\" AND "
+				+ "실제개찰일시 BETWEEN \"" + sd + " 00:00:00\" AND \"" + ed + " 23:59:59\" AND "
 				+ "결과완료=1 AND 복수완료=0;";
 		rs = st.executeQuery(sql);
 		
 		while (rs.next()) {
-			dates.add(rs.getString("예정개찰일시"));
+			bidNums.add(rs.getString("입찰공고번호"));
 		}
 		
-		totalItem += dates.size();
-		for (String date : dates) {
+		totalItem += bidNums.size();
+		for (int i = 0; i < bidNums.size(); i++) {
+			/*
 			date = date.substring(0, 10).replaceAll("-", "") + date.substring(11, 16).replaceAll(":", "");
 			System.out.println(date);
+			*/
 			
-			String path = buildDatePath(date, date);
+			String bidNum = bidNums.get(i);
+			String path = buildItemPath(bidNum);
 			
 			Document doc = getResponse(path);
 			while (doc.getElementsByTag("errMsg").size() > 0) {
@@ -712,10 +826,10 @@ public class OpenAPIReader implements Runnable {
 			int num = 0;
 			int page = 1;
 			Elements items = doc.getElementsByTag("item");
-			for (int i = 0; i < totalCount; i++) {
+			for (int j = 0; j < totalCount; j++) {
 				Element item = items.get(num);
 				
-				String bidNum = item.getElementsByTag("bidNtceNo").text();
+				//String bidNum = item.getElementsByTag("bidNtceNo").text();
 				String bidver = item.getElementsByTag("bidNtceOrd").text(); // 입찰공고차수
 				String series = item.getElementsByTag("bidClsfcNo").text(); // 입찰분류
 				String rebidno = item.getElementsByTag("rbidNo").text(); // 재입찰번호
@@ -1104,7 +1218,7 @@ public class OpenAPIReader implements Runnable {
 			String dbKey = bidNums.get(0) + bidVers.get(0) + rebidNums.get(0) + categories.get(0);
 			
 			int index = 0;
-			while ( (!key.equals(dbKey)) && (index < bidNums.size()) ) {
+			while ( (!key.equals(dbKey)) && ( (index + 1) < bidNums.size()) ) {
 				index++;
 				dbKey = bidNums.get(index) + bidVers.get(index) + rebidNums.get(index) + categories.get(index);
 			}
@@ -1383,6 +1497,11 @@ public class OpenAPIReader implements Runnable {
 				processDiff();
 				break;
 			}
+		} catch(SocketTimeoutException ste) {
+			ste.printStackTrace();
+			if (tracker != null) tracker.restart();
+			restarted = true;
+			run();
 		} catch (Exception e) {
 			Logger.getGlobal().log(Level.WARNING, e.getMessage(), e);
 			e.printStackTrace();

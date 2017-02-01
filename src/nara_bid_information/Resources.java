@@ -70,4 +70,11 @@ public class Resources {
 			e.printStackTrace();
 		}
 	}
+	
+	/*
+	 * Gratefully borrowed from http://stackoverflow.com/questions/1102891/how-to-check-if-a-string-is-numeric-in-java
+	 */
+	public static boolean isNumeric(String str) {
+		return str.matches("-?\\d+(\\.\\d+)?");  //match a number with optional '-' and decimal.
+	}
 }

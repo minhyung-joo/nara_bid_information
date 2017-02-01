@@ -215,10 +215,16 @@ public class ExcelWriter {
 		int cellIndex = 0;
 		int index = 1;
 		while(rs.next()) {
+			String bidno = rs.getString("입찰공고번호");
+			int bidnoCheck = Integer.parseInt(bidno.substring(0, 6));
+			if (bidnoCheck < 201312) {
+				continue;
+			}
+			
 			Row row = sheet.createRow(rowIndex++);
 			cellIndex = 0;
 			row.createCell(cellIndex++).setCellValue(index);
-			row.createCell(cellIndex++).setCellValue(rs.getString("입찰공고번호"));
+			row.createCell(cellIndex++).setCellValue(bidno);
 			if (rs.getString("실제개찰일시") != null) {
 				String od = rs.getString("실제개찰일시");
 				od = od.substring(2,4) + od.substring(5,7) + od.substring(8,16);

@@ -196,4 +196,21 @@ public class UpdaterFrame extends JFrame implements ProgressTracker {
 			}, delay);
 		}
 	}
+
+	public void restart() {
+		prevItem = curItem;
+		lastRun.setText("이전처리건수: " + prevItem);
+		
+		int total = reader.getTotal();
+		curItem = "0";
+		totalItem = "" + total;
+		progress.setText(curItem + "/" + totalItem);
+	}
+
+	public void updateProgress(int i) {
+		int total = reader.getTotal();
+		curItem = "" + i;
+		totalItem = "" + total;
+		progress.setText(curItem + "/" + totalItem);
+	}
 }
