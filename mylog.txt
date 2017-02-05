@@ -1,0 +1,29 @@
+2월 04, 2017 9:21:14 오후 nara_bid_information.OpenAPIReader run
+경고: Server returned HTTP response code: 500 for URL: http://apis.data.go.kr/1230000/BidPublicInfoService/getBidPblancListInfoServc?inqryDiv=1&ServiceKey=J0qA4h8ti9oPo90bJJ8COx%2BxiJ1AXL7dyffFfFGiHHVNKj2LWrFE1GJxJ2HdKmMfI%2BhSYKblaSLGnkAlvkW1gw%3D%3D&numOfRows=2500&inqryBgnDt=201701220000&inqryEndDt=201701272359&pageNo=1
+java.io.IOException: Server returned HTTP response code: 500 for URL: http://apis.data.go.kr/1230000/BidPublicInfoService/getBidPblancListInfoServc?inqryDiv=1&ServiceKey=J0qA4h8ti9oPo90bJJ8COx%2BxiJ1AXL7dyffFfFGiHHVNKj2LWrFE1GJxJ2HdKmMfI%2BhSYKblaSLGnkAlvkW1gw%3D%3D&numOfRows=2500&inqryBgnDt=201701220000&inqryEndDt=201701272359&pageNo=1
+	at sun.reflect.NativeConstructorAccessorImpl.newInstance0(Native Method)
+	at sun.reflect.NativeConstructorAccessorImpl.newInstance(NativeConstructorAccessorImpl.java:62)
+	at sun.reflect.DelegatingConstructorAccessorImpl.newInstance(DelegatingConstructorAccessorImpl.java:45)
+	at java.lang.reflect.Constructor.newInstance(Constructor.java:423)
+	at sun.net.www.protocol.http.HttpURLConnection$10.run(HttpURLConnection.java:1890)
+	at sun.net.www.protocol.http.HttpURLConnection$10.run(HttpURLConnection.java:1885)
+	at java.security.AccessController.doPrivileged(Native Method)
+	at sun.net.www.protocol.http.HttpURLConnection.getChainedException(HttpURLConnection.java:1884)
+	at sun.net.www.protocol.http.HttpURLConnection.getInputStream0(HttpURLConnection.java:1457)
+	at sun.net.www.protocol.http.HttpURLConnection.getInputStream(HttpURLConnection.java:1441)
+	at nara_bid_information.OpenAPIReader.getResponse(OpenAPIReader.java:233)
+	at nara_bid_information.OpenAPIReader.processNoti(OpenAPIReader.java:335)
+	at nara_bid_information.OpenAPIReader.processNoti(OpenAPIReader.java:302)
+	at nara_bid_information.OpenAPIReader.run(OpenAPIReader.java:1479)
+	at java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:511)
+	at java.util.concurrent.FutureTask.run(FutureTask.java:266)
+	at java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1142)
+	at java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:617)
+	at java.lang.Thread.run(Thread.java:745)
+Caused by: java.io.IOException: Server returned HTTP response code: 500 for URL: http://apis.data.go.kr/1230000/BidPublicInfoService/getBidPblancListInfoServc?inqryDiv=1&ServiceKey=J0qA4h8ti9oPo90bJJ8COx%2BxiJ1AXL7dyffFfFGiHHVNKj2LWrFE1GJxJ2HdKmMfI%2BhSYKblaSLGnkAlvkW1gw%3D%3D&numOfRows=2500&inqryBgnDt=201701220000&inqryEndDt=201701272359&pageNo=1
+	at sun.net.www.protocol.http.HttpURLConnection.getInputStream0(HttpURLConnection.java:1840)
+	at sun.net.www.protocol.http.HttpURLConnection.getInputStream(HttpURLConnection.java:1441)
+	at java.net.HttpURLConnection.getResponseCode(HttpURLConnection.java:480)
+	at nara_bid_information.OpenAPIReader.getResponse(OpenAPIReader.java:229)
+	... 8 more
+

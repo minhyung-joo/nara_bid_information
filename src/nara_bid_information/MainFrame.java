@@ -124,6 +124,7 @@ public class MainFrame extends JFrame {
 				UpdaterFrame preFrame = new UpdaterFrame("예비가격", anchorDate);
 			}
 		});
+		/*
 		negoDownload = new JMenuItem("협상에의한건처리");
 		negoDownload.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
@@ -140,6 +141,7 @@ public class MainFrame extends JFrame {
 				UpdaterFrame negoFrame = new UpdaterFrame("협상", anchorDate);
 			}
 		});
+		*/
 		changeDownload = new JMenuItem("공고변경/재입찰");
 		changeDownload.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
@@ -161,7 +163,7 @@ public class MainFrame extends JFrame {
 		downloadMenu.add(resDownload);
 		downloadMenu.add(basePriceDownload);
 		downloadMenu.add(prePriceDownload);
-		downloadMenu.add(negoDownload);
+		//downloadMenu.add(negoDownload);
 		downloadMenu.add(changeDownload);
 		
 		viewMenu = new JMenu("조회");

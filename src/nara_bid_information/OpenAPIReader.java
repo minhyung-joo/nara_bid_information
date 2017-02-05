@@ -346,7 +346,7 @@ public class OpenAPIReader implements Runnable {
 		Elements items = doc.getElementsByTag("item");
 		int i = (restarted) ? savedItem : 0;
 		for ( ; i < totalCount; i++) {
-			if (tracker != null) tracker.updateProgress(i); 
+			if (tracker != null) tracker.updateProgress(); 
 			
 			savedItem = i;
 			Element item = items.get(index);
@@ -373,15 +373,19 @@ public class OpenAPIReader implements Runnable {
 			String bidRate = item.getElementsByTag("sucsfbidLwltRate").text(); // ³«ÂûÇÏÇÑÀ²
 			
 			String license = "";
+			int licenseCount = 0;
 			String licensePath = buildLicensePath(bidnum, bidver);
 			Document licenseDoc = getResponse(licensePath);
 			Element countDiv = licenseDoc.getElementsByTag("totalcount").first();
-			while ( countDiv == null || countDiv.text().equals("") ) {
+			if ( countDiv == null || countDiv.text().equals("") ) {
 				Thread.sleep(500);
 				licenseDoc = getResponse(licensePath);
 				countDiv = licenseDoc.getElementsByTag("totalcount").first();
 			}
-			int licenseCount = Integer.parseInt(countDiv.text());
+			if ( countDiv == null || countDiv.text().equals("") ) {
+				licenseCount = 0;
+			}
+			else licenseCount = Integer.parseInt(countDiv.text()); 
 			
 			Elements licenseItems = licenseDoc.getElementsByTag("item");
 			for (int j = 0; j < licenseCount; j++) {
