@@ -104,6 +104,8 @@ public class BidPanel extends JPanel {
 	}
 	
 	public void adjustColumns() {
+		data.setFont(new Font("¸¼Àº °íµñ", Font.PLAIN, 15));
+		data.setRowHeight(20);
 		final TableColumnModel columnModel = data.getColumnModel();
 		
 		for (int i = 0; i < 21; i++) {

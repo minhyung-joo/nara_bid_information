@@ -21,7 +21,7 @@ import org.jsoup.select.Elements;
 
 public class OpenAPIReader implements Runnable {
 	final String SERVER_KEY = Resources.SERVER_KEY;
-	final String NUM_OF_ROWS = "2500";
+	final String NUM_OF_ROWS = "1500";
 	
 	enum Type {
 		PROD,
@@ -371,31 +371,7 @@ public class OpenAPIReader implements Runnable {
 			String reprice = item.getElementsByTag("rsrvtnPrceReMkngMthdNm").text(); // 예가재작성여부
 			String priceMethod = item.getElementsByTag("prearngPrceDcsnMthdNm").text(); // 예가방식
 			String bidRate = item.getElementsByTag("sucsfbidLwltRate").text(); // 낙찰하한율
-			
-			String license = "";
-			int licenseCount = 0;
-			String licensePath = buildLicensePath(bidnum, bidver);
-			Document licenseDoc = getResponse(licensePath);
-			Element countDiv = licenseDoc.getElementsByTag("totalcount").first();
-			if ( countDiv == null || countDiv.text().equals("") ) {
-				Thread.sleep(500);
-				licenseDoc = getResponse(licensePath);
-				countDiv = licenseDoc.getElementsByTag("totalcount").first();
-			}
-			if ( countDiv == null || countDiv.text().equals("") ) {
-				licenseCount = 0;
-			}
-			else licenseCount = Integer.parseInt(countDiv.text()); 
-			
-			Elements licenseItems = licenseDoc.getElementsByTag("item");
-			for (int j = 0; j < licenseCount; j++) {
-				Element licenseItem = licenseItems.get(j);
-				String licenseText = licenseItem.getElementsByTag("lcnsLmtNm").text(); 
-				if (!licenseText.equals("")) {
-					license += "[" + licenseText + "] ";
-				}
-			}
-			if (license.length() > 200) license = license.substring(0, 200);
+			String license = ""; // 면허제한
 			
 			Elements buyCheck = item.getElementsByTag("purchsObjPrdctList"); // 구매대상물품목록
 			if ( (buyCheck.size() > 0) && buyCheck.text().length() > 2 ) {
@@ -459,6 +435,32 @@ public class OpenAPIReader implements Runnable {
 			}
 				
 			if (!complete) {
+				int licenseCount = 0;
+				if (Resources.isNumeric(bidnum)) {
+					String licensePath = buildLicensePath(bidnum, bidver);
+					Document licenseDoc = getResponse(licensePath);
+					Element countDiv = licenseDoc.getElementsByTag("totalcount").first();
+					if ( countDiv == null || countDiv.text().equals("") ) {
+						Thread.sleep(500);
+						licenseDoc = getResponse(licensePath);
+						countDiv = licenseDoc.getElementsByTag("totalcount").first();
+					}
+					if ( countDiv == null || countDiv.text().equals("") ) {
+						licenseCount = 0;
+					}
+					else licenseCount = Integer.parseInt(countDiv.text()); 
+					
+					Elements licenseItems = licenseDoc.getElementsByTag("item");
+					for (int j = 0; j < licenseCount; j++) {
+						Element licenseItem = licenseItems.get(j);
+						String licenseText = licenseItem.getElementsByTag("lcnsLmtNm").text(); 
+						if (!licenseText.equals("")) {
+							license += "[" + licenseText + "] ";
+						}
+					}
+					if (license.length() > 200) license = license.substring(0, 200);
+				}
+				
 				String where = "WHERE 입찰공고번호=\"" + bidnum + "\" AND "
 						+ "입찰공고차수=\"" + bidver + "\"";
 				
